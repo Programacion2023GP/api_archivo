@@ -1,0 +1,149 @@
+{
+    "table": "traffic",
+    "timestamp": "2025-12-01_120201",
+    "record_count": 4,
+    "structure": {
+        "id": {
+            "type": "bigint unsigned",
+            "null": "NO",
+            "key": "PRI",
+            "default": null,
+            "extra": "auto_increment"
+        },
+        "citizen_name": {
+            "type": "varchar(255)",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        },
+        "age": {
+            "type": "int",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        },
+        "rank": {
+            "type": "varchar(255)",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        },
+        "plate_number": {
+            "type": "varchar(255)",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        },
+        "vehicle_brand": {
+            "type": "varchar(255)",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        },
+        "time": {
+            "type": "varchar(255)",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        },
+        "location": {
+            "type": "varchar(255)",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        },
+        "person_oficial": {
+            "type": "varchar(255)",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        },
+        "active": {
+            "type": "tinyint(1)",
+            "null": "NO",
+            "key": "",
+            "default": "1",
+            "extra": ""
+        },
+        "created_at": {
+            "type": "timestamp",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        },
+        "updated_at": {
+            "type": "timestamp",
+            "null": "YES",
+            "key": "",
+            "default": null,
+            "extra": ""
+        }
+    },
+    "data": [
+        {
+            "id": 1,
+            "citizen_name": null,
+            "age": 0,
+            "rank": null,
+            "plate_number": null,
+            "vehicle_brand": null,
+            "time": null,
+            "location": "G\u00f3mez Palacio",
+            "person_oficial": null,
+            "active": 0,
+            "created_at": "2025-11-28 11:42:01",
+            "updated_at": "2025-11-28 11:42:06"
+        },
+        {
+            "id": 2,
+            "citizen_name": "LUIS ANGEL",
+            "age": 33,
+            "rank": "3",
+            "plate_number": "302404'023",
+            "vehicle_brand": "DSADA",
+            "time": "22:12",
+            "location": "G\u00f3mez Palacio",
+            "person_oficial": "LUIS ANGEL RAMIREZ YA\u00d1EZ",
+            "active": 1,
+            "created_at": "2025-11-28 11:42:26",
+            "updated_at": "2025-11-28 12:23:20"
+        },
+        {
+            "id": 3,
+            "citizen_name": null,
+            "age": null,
+            "rank": null,
+            "plate_number": null,
+            "vehicle_brand": null,
+            "time": null,
+            "location": "G\u00f3mez Palacio",
+            "person_oficial": null,
+            "active": 1,
+            "created_at": "2025-12-01 10:41:24",
+            "updated_at": "2025-12-01 10:41:24"
+        },
+        {
+            "id": 4,
+            "citizen_name": null,
+            "age": null,
+            "rank": null,
+            "plate_number": null,
+            "vehicle_brand": null,
+            "time": null,
+            "location": "G\u00f3mez Palacio",
+            "person_oficial": null,
+            "active": 1,
+            "created_at": "2025-12-01 10:41:30",
+            "updated_at": "2025-12-01 10:41:30"
+        }
+    ]
+}
