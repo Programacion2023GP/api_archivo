@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
 
         // Limpiar tablas
         DB::table('users')->truncate();
+        DB::table('status')->truncate();
 
         DB::table('user_permissions')->truncate();
         DB::table('permissions')->truncate();
@@ -50,6 +51,20 @@ class DatabaseSeeder extends Seeder
             DB::table('permissions')->insert([
                 'name' => $permission['name'],
                 'active' => $permission['active'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $status = [
+            ['name' => 'captura', 'active' => true],
+            ['name' => 'autorizacion', 'active' => true],
+            ['name' => 'finalizado', 'active' => true],
+        ];
+
+        foreach ($status as $statu) {
+            DB::table('status')->insert([
+                'name' => $statu['name'],
+                'active' => $statu['active'],
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

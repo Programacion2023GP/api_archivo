@@ -156,4 +156,79 @@ class DepartamentController extends Controller
             return ApiResponse::error('Error en la acción', 500);
         }
     }
+    public function getAbbreviationPath($id)
+    {
+        try {
+            $departament = Departament::find($id);
+
+            if (!$departament) {
+                return ApiResponse::error('Departamento no encontrado', 404);
+            }
+
+            $path = $this->buildAbbreviationPath($departament);
+
+            return  $path;
+        } catch (Exception $e) {
+            Log::error("departamentos getAbbreviationPath: " . $e->getMessage());
+            return $e;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Sube recursivamente acumulando abreviaturas en un array, luego arma
+    // la cadena con el orden: raíz + nodo enviado + intermedios sin raíz.
+    //
+    // Internamente collectAncestors devuelve [TI, DAO, CM] (de hijo a raíz).
+    // Después:
+    //   - raíz    = último elemento  → CM
+    //   - resto   = todos sin raíz   → [TI, DAO]
+    //   - resultado = CM + "-" + TI + "-" + DAO  →  CM-TI-DAO
+    // ─────────────────────────────────────────────────────────────────────────
+    private function buildAbbreviationPath(Departament $departament): string
+    {
+        // Si el nodo enviado ES la raíz, solo devuelve su abreviatura
+        if (is_null($departament->departament_id)) {
+            return $departament->abbreviation;
+        }
+
+        // Recolecta todos los ancestros de hijo → raíz: [TI, DAO, CM]
+        $chain = $this->collectAncestors($departament);
+
+        // La raíz es el último elemento
+        $root = end($chain);
+
+        // El resto son todos menos la raíz: [TI, DAO]
+        $withoutRoot = array_slice($chain, 0, count($chain) - 1);
+
+        // Arma: CM - TI - DAO
+        $abbreviations = array_merge(
+            [$root->abbreviation],
+            array_map(fn($d) => $d->abbreviation, $withoutRoot)
+        );
+
+        return implode('-', $abbreviations);
+    }
+
+    // Sube de hijo en hijo hasta la raíz y devuelve el array en ese orden.
+    // Ejemplo: TI → [TI, DAO, CM]
+    private function collectAncestors(Departament $departament): array
+    {
+        $chain = [$departament];
+
+        $current = $departament;
+
+        while (!is_null($current->departament_id)) {
+            $parent = Departament::find($current->departament_id);
+
+            // Seguridad: si el padre no existe se corta la cadena
+            if (!$parent) {
+                break;
+            }
+
+            $chain[] = $parent;
+            $current  = $parent;
+        }
+
+        return $chain;
+    }
 }

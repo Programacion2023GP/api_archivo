@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ApiResponse;
+use App\Models\Departament;
 use App\Models\Proccess;
 use Exception;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ class ProccessController extends Controller
     public function createorUpdate(Request $request)
     {
         try {
+       
             $data = [
                 'name' => $request->name,
                 'departament_id' => $request->departament_id,
@@ -45,21 +47,27 @@ class ProccessController extends Controller
             return ApiResponse::error('Ocurrió un error', 500);
         }
     }
-    private function addLevel($departments, $level = 0)
+    private function addLevel($items, $level = 0)
     {
-        return $departments->map(function ($dept) use ($level) {
+        return $items->map(function ($item) use ($level) {
+            $children = $item->childrenRecursive ?? collect();
 
-            $dept->level = $level;
+            return [
+                'id'                 => $item->id,
+                'classification_code'               => $item->classification_code,
+                'name'               => $item->name,
+                'at'               => $item->at,
 
-            if ($dept->childrenRecursive && $dept->childrenRecursive->isNotEmpty()) {
-                $dept->childrenRecursive = $this->addLevel(
-                    $dept->childrenRecursive,
-                    $level + 1
-                );
-            }
+                'ac'               => $item->ac,
+                'total'               => $item->total,
+                'description'               => $item->description,
 
-            return $dept;
-        });
+                'departament_id'     => $item->departament_id,
+                'level'              => $level,
+                'selectable'         => $children->isEmpty(), // ← se calcula aquí
+                'children_recursive' => $this->addLevel($children, $level + 1),
+            ];
+        })->values();
     }
     public function index(int $id)
     {
@@ -83,32 +91,94 @@ class ProccessController extends Controller
             return ApiResponse::error('Ocurrió un error', 500);
         }
     }
+    private function getDepartmentChildrenIds($departmentId)
+    {
+        $ids = [$departmentId];
+
+        // Obtener todos los departamentos hijos directos
+        $children = Departament::where('departament_id', $departmentId)
+            ->where('active', true)
+            ->pluck('id')
+            ->toArray();
+
+        foreach ($children as $childId) {
+            // Recursivamente obtener los hijos de cada hijo
+            $ids = array_merge($ids, $this->getDepartmentChildrenIds($childId));
+        }
+
+        return $ids;
+    }
+    private function buildDepartmentTree($departments, $parentId = null)
+    {
+        return $departments
+            ->where('departament_id', $parentId)
+            ->map(function ($dept) use ($departments) {
+                $children = $this->buildDepartmentTree($departments, $dept->id);
+                $processes = Proccess::whereNull('proccess_id')
+                    ->where('departament_id', $dept->id)
+                    ->where('active', true)
+                    ->with(['childrenRecursive' => function ($q) {
+                        $q->where('active', true);
+                    }])
+                    ->get();
+
+                $processNodes = $this->addLevel($processes);
+
+                // hijos = subdepartamentos + procesos del departamento
+                $allChildren = $children->concat($processNodes);
+
+                return [
+                    'id'                 => 'dept_' . $dept->id,
+                    'name'               => $dept->name,
+                    'selectable'         => false,
+                    'children_recursive' => $allChildren->values(),
+                ];
+            })->values();
+    }
+
     public function processByUser()
     {
         try {
-            $proccess = Proccess::whereNull('proccess_id')
-                ->with([
-                    'childrenRecursive' => function ($query) {
-                        $query->where('active', true);
-                    }
-                ]);
             if (Auth::user()->role != "administrador") {
-                # code...
-                $proccess = $proccess->where('departament_id', Auth::user()->departament_id);
+                $departmentIds = $this->getDepartmentChildrenIds(Auth::user()->departament_id);
+                $departments = Departament::whereIn('id', $departmentIds)
+                    ->where('active', true)
+                    ->get();
+
+                // Usar directamente el departamento del usuario como raíz
+                $tree = $this->buildDepartmentTree(
+                    $departments,
+                    $departments->first()?->departament_id  // padre real
+                );
+
+                // Si sigue vacío, el usuario ES el nodo raíz — construir desde su propio depto
+                if ($tree->isEmpty()) {
+                    $tree = $this->buildDepartmentTree(
+                        $departments,
+                        null  // tratarlo como raíz
+                    );
+                }
+            } else {
+                $departments = Departament::where('active', true)->get();
+                $tree = $this->buildDepartmentTree($departments, null);
             }
 
-            $proccess = $proccess->get();
-            // Mapear a una nueva estructura
-
-            $formattedDepartments = $this->addLevel($proccess);
-
-            return ApiResponse::success($formattedDepartments, 'Procesos obtenidos correctamente');
+            return ApiResponse::success($tree, 'Procesos obtenidos correctamente');
         } catch (Exception $e) {
-            Log::error("proccess index: " . $e->getMessage());
+            Log::error("proccess processByUser: " . $e->getMessage());
             return ApiResponse::error('Ocurrió un error', 500);
         }
     }
+// ```
 
+// El árbol quedaría así:
+// ```
+// Oficialía Mayor          (selectable: false)
+//   └─ Dirección CETIC     (selectable: false)
+//        ├─ t1             (selectable: true)
+//        └─ t2             (selectable: true)
+//   └─ Contraloría         (selectable: false)
+//        └─ t1             (selectable: true)
     private function deactivateTree(Proccess $departament)
     {
         // Primero desactivar hijos

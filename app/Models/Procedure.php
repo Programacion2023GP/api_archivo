@@ -9,26 +9,53 @@ class Procedure extends Model
     protected $table = 'procedures';
 
     protected $fillable = [
+        'year',
+
         'boxes',
-        'fileNumber',
-        'archiveCode',
         'process_id',
+        // 'fileNumber',
+        // 'archiveCode',
         'user_id',
         'departament_id',
-        'description',
-        'digital',
-        'electronic',
         'startDate',
         'endDate',
+        'description',
+        'electronic',
         'totalPages',
-        'observation'
+        'observation',
+        'administrative_value',
+        'accounting_fiscal_value',
+        'legal_value',
+        'retention_period_current',
+        'retention_period_archive',
+        'location_building',
+        'location_furniture',
+        'location_position',
+        'errorFieldsKey',
+        'errorDescriptionField',    
+        'fisic',
+        'status_id',
+        'error',
+
     ];
 
     protected $casts = [
         'digital' => 'boolean',
+        'status_id' => 'number',
+        'fisic' => 'boolean',
+        'error' => 'boolean',
+
         'electronic' => 'boolean',
-        'startDate' => 'date',
-        'endDate' => 'date'
+        'administrative_value' => 'boolean',
+        'accounting_fiscal_value' => 'boolean',
+        'legal_value' => 'boolean',
+       
+        'location_building' => 'boolean',
+        'location_position' => 'boolean',
+        'location_furniture' => 'boolean',
+
+        'startDate' => 'date:Y-m-d',
+        'endDate' => 'date:Y-m-d',
     ];
     // public function process()
     // {

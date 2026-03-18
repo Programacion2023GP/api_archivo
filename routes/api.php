@@ -26,20 +26,21 @@ Route::prefix('/users')->group(
 
 
 
-// Rutas protegidas por Sanctum
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/logs', [LogController::class, 'index']);
+    // Rutas protegidas por Sanctum
+    Route::prefix('/departaments')->group(function () {
+        Route::get('/index', [DepartamentController::class, 'index']);
+    
+        Route::post('/createorUpdate', [DepartamentController::class, 'createorUpdate']);
+        Route::post('/authorized', [DepartamentController::class, 'authorized']);
+        
+        Route::delete('/delete', [DepartamentController::class, 'destroy']);
+    });
 
     // Usuarios
 
 
-    Route::prefix('/departaments')->group(function () {
-        Route::get('/index', [DepartamentController::class, 'index']);
-        Route::post('/createorUpdate', [DepartamentController::class, 'createorUpdate']);
-        Route::post('/authorized', [DepartamentController::class, 'authorized']);
-
-        Route::delete('/delete', [DepartamentController::class, 'destroy']);
-    });
 
 
     Route::prefix('/permissions')->group(function () {

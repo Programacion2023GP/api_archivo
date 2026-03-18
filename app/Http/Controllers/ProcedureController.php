@@ -18,24 +18,36 @@ class ProcedureController extends Controller
 
             foreach ($items as $item) {
                 $data = [
+                    'year' => $item['year'] ?? null,
+
                     'boxes' => $item['boxes'] ?? null,
-                    'fileNumber' => $item['fileNumber'] ?? null,
-                    'archiveCode' => $item['archiveCode'] ?? null,
+                    // 'fileNumber' => $item['fileNumber'] ?? null,
+                    // 'archiveCode' => $item['archiveCode'] ?? null,
                     'process_id' => $item['process_id'] ?? null,
                     'user_id' => Auth::user()->id,
                     'departament_id' => Auth::user()->departament_id,
                     'description' => $item['description'] ?? null,
-                    'digital' => $item['digital'] ?? false,
+                    'fisic' => $item['fisic'] ?? false,
                     'electronic' => $item['electronic'] ?? false,
                     'startDate' => $item['startDate'] ?? null,
                     'endDate' => $item['endDate'] ?? null,
                     'totalPages' => $item['totalPages'] ?? null,
-                    'batery' => $item['batery'] ?? false,
-                    'shelf' => $item['shelf'] ?? false,
-                    'level' => $item['level'] ?? false,
-                    'stock' => $item['stock'] ?? null,
+                    'administrative_value' => $item['administrative_value'] ?? false,
+                    'accounting_fiscal_value' => $item['accounting_fiscal_value'] ?? false,
+                    'legal_value' => $item['legal_value'] ?? false,
+                    'retention_period_current' => $item['retention_period_current'] ?? false,
+                    'retention_period_archive' => $item['retention_period_archive'] ?? false,
+                    'location_building' => $item['location_building'] ?? false,
+                    'location_furniture' => $item['location_furniture'] ?? false,
+                    'location_position' => $item['location_position'] ?? false,
                     'observation' => $item['observation'] ?? null,
+                    'errorDescriptionField' => $item['errorDescriptionField'] ?? null,
+                    'error' => $item['errorDescriptionField'] ?? false,
+
+                    'errorFieldsKey' => $item['errorFieldsKey'] ?? null,
+                    'status_id' => $item['status_id'] ?? 1,
                 ];
+  
 
                 // Check if the item has an ID (update)
                 if (isset($item['id']) && !empty($item['id'])) {
@@ -63,7 +75,7 @@ class ProcedureController extends Controller
 
             return ApiResponse::success($procedures, "Registros procesados correctamente");
         } catch (Exception $e) {
-            return ApiResponse::error($e->getMessage(), 500);
+            return ApiResponse::error('ocurrio un error', 500);
         }
     }
     public function index()
