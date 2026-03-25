@@ -44,7 +44,6 @@ class DepartamentController extends Controller
     private function addLevel($departments, $level = 0)
     {
         return $departments->map(function ($dept) use ($level) {
-
             $dept['level'] = $level;
 
             if (!empty($dept['children_recursive'])) {
@@ -78,29 +77,33 @@ class DepartamentController extends Controller
                 ])
                 ->where("active", true)
                 ->get();
-            // Mapear a una nueva estructura
-            $formattedDepartments = $departments->map(function ($department) {
+
+            // Función recursiva para formatear
+            $formatDepartment = function ($department) use (&$formatDepartment) {
                 $deptArray = $department->toArray();
-                // Reemplazar director por solo el nombre
+
+                // Agregar responsable del nivel actual
                 $deptArray['responsible'] = $department->director ? $department->director->fullName : null;
 
-                // Procesar hijos recursivamente
-                if (isset($deptArray['children_recursive']) && is_array($deptArray['children_recursive'])) {
-                    $deptArray['children_recursive'] = collect($deptArray['children_recursive'])->map(function ($child) use ($department) {
-                        // Buscar el child real con la relación cargada
-                        $childModel = $department->childrenRecursive->firstWhere('id', $child['id']);
-                        if ($childModel && $childModel->director) {
-                            $child['responsible'] = $childModel->director->fullName;
-                        } else {
-                            $child['responsible'] = null;
-                        }
-                        return $child;
-                    })->toArray();
+                // Procesar hijos recursivamente usando los modelos, no los arrays
+                if ($department->childrenRecursive && $department->childrenRecursive->count() > 0) {
+                    $deptArray['children_recursive'] = $department->childrenRecursive
+                        ->map(function ($child) use ($formatDepartment) {
+                            return $formatDepartment($child);
+                        })
+                        ->toArray();
+                } else {
+                    $deptArray['children_recursive'] = [];
                 }
 
                 return $deptArray;
-            });
-            $formattedDepartments = $this->addLevel($formattedDepartments);
+            };
+
+            // Aplicar formato a todos los departamentos raíz
+            $formattedDepartments = $departments->map($formatDepartment);
+
+            // Aplicar niveles
+            $formattedDepartments = $this->addLevel(collect($formattedDepartments));
 
             return ApiResponse::success($formattedDepartments, 'Departamentos obtenidos correctamente');
         } catch (Exception $e) {
@@ -108,6 +111,7 @@ class DepartamentController extends Controller
             return ApiResponse::error('Ocurrió un error', 500);
         }
     }
+
     private function deactivateTree(Departament $departament)
     {
         // Primero desactivar hijos

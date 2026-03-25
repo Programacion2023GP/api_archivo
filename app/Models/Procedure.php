@@ -34,14 +34,14 @@ class Procedure extends Model
         'errorFieldsKey',
         'errorDescriptionField',    
         'fisic',
-        'status_id',
+        'statu_id',
         'error',
 
     ];
 
     protected $casts = [
         'digital' => 'boolean',
-        'status_id' => 'number',
+        'statu_id' => 'integer',
         'fisic' => 'boolean',
         'error' => 'boolean',
 

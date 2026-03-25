@@ -58,9 +58,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('/procedure')->group(function () {
         Route::get('/index', [ProcedureController::class, 'index']);
+        Route::get('/detailsprocedure/{created_at}/{departament_id}', [ProcedureController::class, 'detailsProcedure']);
+        Route::get('/listautorized/{departament_id}', [ProcedureController::class, 'getAuthorizationChain']);
+
         // Route::get('/processbyuser', [ProccessController::class, 'processByUser']);
-
-
+        // detailsProcedure
+        Route::post('/changestatus', [ProcedureController::class, 'changeStatus']);
 
         Route::post('/createorUpdate', [ProcedureController::class, 'createorUpdate']);
         // Route::delete('/delete', [ProccessController::class, 'destroy']);

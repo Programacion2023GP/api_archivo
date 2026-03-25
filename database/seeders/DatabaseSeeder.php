@@ -57,8 +57,11 @@ class DatabaseSeeder extends Seeder
         }
         $status = [
             ['name' => 'captura', 'active' => true],
-            ['name' => 'autorizacion', 'active' => true],
+            ['name' => 'enviado', 'active' => true],
+            ['name' => 'autorizado', 'active' => true],
+            
             ['name' => 'finalizado', 'active' => true],
+            ['name' => 'rechazado', 'active' => true],
         ];
 
         foreach ($status as $statu) {
