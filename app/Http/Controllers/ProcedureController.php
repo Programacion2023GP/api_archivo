@@ -7,6 +7,9 @@ use App\Models\Departament;
 use App\Models\Proccess;
 use App\Models\Procedure;
 use App\Models\ProceduresCreatedAt;
+use App\Models\SignaturesProcedure;
+use App\Models\SignedByProcedure;
+use App\Models\Status;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
@@ -22,7 +25,7 @@ class ProcedureController extends Controller
             $results = DB::select('CALL sp_authorization_chain(?)', [$departament_id]);
 
             // Ver los resultados
-          
+
             return ApiResponse::success($results, "Registros procesados correctamente");
         } catch (Exception $e) {
             return ApiResponse::error('error', 500);
@@ -31,12 +34,24 @@ class ProcedureController extends Controller
     public function index()
     {
         try {
+            $status = Status::where('active', 1)->get();
             $procedures = ProceduresCreatedAt::query();
 
             if (strtolower(Auth::user()->role) == 'administrador') {
                 // Administrador ve todos
             } else if (strtolower(Auth::user()->role) == 'director') {
-                $procedures = $procedures->where('departament_id', Auth::user()->departament_id);
+                // Obtener el departamento del director
+                $directorDept = Departament::with('childrenRecursive')
+                    ->find(Auth::user()->departament_id);
+
+                if ($directorDept) {
+                    // Obtener todos los IDs de departamentos (incluyendo el propio y todos los hijos recursivos)
+                    $departmentIds = $this->getAllDepartmentIds($directorDept);
+                    $procedures = $procedures->whereIn('departament_id', $departmentIds);
+                } else {
+                    // Fallback: solo su propio departamento
+                    $procedures = $procedures->where('departament_id', Auth::user()->departament_id);
+                }
             } else {
                 $procedures = $procedures->where('user_id', Auth::user()->id)
                     ->where('departament_id', Auth::user()->departament_id);
@@ -45,16 +60,58 @@ class ProcedureController extends Controller
             $procedures = $procedures->orderByDesc('order_date')->get();
 
             // Agregar cadena de autorización a cada procedimiento
-            $procedures->each(function ($procedure) {
-                $procedure->authorization_chain = DB::select('CALL sp_authorization_chain(?)', [$procedure->departament_id]);
+            $procedures->each(function ($procedure) use ($status) {
+                $chain = SignedByProcedure::where('procedure_id', $procedure->id)->get();
+
+                $statusUpTo3 = $status->where('id', '<=', 3)
+                    ->map(function ($item) {
+                        return [
+                            'procedure_id' => 0,
+                            'name' => strtoupper($item->name),
+                            'active' => $item->active,
+                        ];
+                    })->values();
+
+                // $statusFrom4 = $status->where('id', '>=', 4)->where('id', '<', 6)
+                //     ->map(function ($item) {
+                //         return [
+                //             'procedure_id' => 0,
+                //             'name' => strtoupper($item->name),
+                //             'active' => $item->active,
+                //         ];
+                //     })->values();
+
+                $procedure->authorization_chain = array_merge(
+                    $statusUpTo3->toArray(),
+                    $chain->toArray(),
+                    // $statusFrom4->toArray()
+                );
             });
 
             return ApiResponse::success($procedures, 'Procesos obtenidos correctamente');
         } catch (Exception $e) {
-            return ApiResponse::error('ocurrio un error', 500);
+            return ApiResponse::error('Ocurrió un error: ' . $e->getMessage(), 500);
         }
     }
 
+    /**
+     * Obtiene recursivamente todos los IDs de departamentos incluyendo hijos
+     */
+    private function getAllDepartmentIds($department, &$ids = [])
+    {
+        // Agregar el ID del departamento actual
+        $ids[] = $department->id;
+
+        // Recorrer los hijos recursivamente
+        if ($department->childrenRecursive) {
+            foreach ($department->childrenRecursive as $child) {
+                $this->getAllDepartmentIds($child, $ids);
+            }
+        }
+
+        return array_unique($ids); // Eliminar duplicados por si acaso
+    }
+    
 
     public function createOrUpdate(Request $request)
     {
@@ -64,6 +121,7 @@ class ProcedureController extends Controller
             $processes = Proccess::select('id', 'departament_id')->get();
             foreach ($items as $item) {
                 $process = $processes->firstWhere('id', $item['process_id']);
+                $chain = DB::select('CALL sp_authorization_chain(?)', [$process ? $process->departament_id : Auth::user()->departament_id]);
 
                 $data = [
                     'year' => $item['year'] ?? null,
@@ -110,20 +168,34 @@ class ProcedureController extends Controller
                         // Handle case where ID is provided but procedure doesn't exist
                         // Option 1: Create new with the provided ID (may cause issues if ID exists)
                         $data['id'] = $item['id'];
-                        $procedures[] = Procedure::create($data);
+                        $procedures[] = $procedure;
+                        foreach ($chain as $item) {
+                            SignaturesProcedure::create([
+                                "procedure_id" => $procedure->id,
+                                "user_id" => $item->user_id,
 
+                            ]);
+                        }
                         // Option 2: Skip or return error
                         // throw new Exception("Procedure with ID {$item['id']} not found");
                     }
                 } else {
                     // Create new procedure
-                    $procedures[] = Procedure::create($data);
+                    $procedure = Procedure::create($data);
+                    $procedures[] = $procedure;
+                    foreach ($chain as $item) {
+                        SignaturesProcedure::create([
+                            "procedure_id" => $procedure->id,
+                            "user_id" => $item->user_id,
+
+                        ]);
+                    }
                 }
             }
 
             return ApiResponse::success($procedures, "Registros procesados correctamente");
         } catch (Exception $e) {
-            return ApiResponse::error('ocurrio un error', 500);
+            return ApiResponse::error($e->getMessage(), 500);
         }
     }
 
@@ -277,7 +349,7 @@ class ProcedureController extends Controller
             if ($user->role == 'administrador') {
                 $query->where('procedures.departament_id', $departament_id);
             } else if (strtolower($user->role) == 'director') {
-                $query->where('procedures.departament_id', $user->departament_id);
+              $query->where('procedures.departament_id', $departament_id);
             } else {
                 $query->where('procedures.departament_id', $user->departament_id);
             }
@@ -330,7 +402,7 @@ class ProcedureController extends Controller
     {
         try {
             $procedure = Procedure::whereRaw('DATE(created_at) = ?', [Carbon::parse($request->startDate)->format('Y-m-d')])
-                ->where('departament_id',$request->departament_id)->update(["statu_id" => $request->status]);
+                ->where('departament_id', $request->departament_id)->update(["statu_id" => $request->status]);
             return ApiResponse::success($procedure, 'Procesos actualizados correctamente');
         } catch (Exception $e) {
             return ApiResponse::error('ocurrio un error', 500);

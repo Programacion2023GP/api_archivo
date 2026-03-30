@@ -9,6 +9,7 @@ use App\Http\Controllers\DepartamentController;
 use App\Http\Controllers\PenaltyController;
 use App\Http\Controllers\ProccessController;
 use App\Http\Controllers\ProcedureController;
+use App\Http\Controllers\SignatureProcedureController;
 use App\Models\Departament;
 
 // Rutas públicas
@@ -55,7 +56,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/createorUpdate', [ProccessController::class, 'createorUpdate']);
         Route::delete('/delete', [ProccessController::class, 'destroy']);
     });
+    Route::prefix('/signature')->group(function () {
+        Route::post('/byuser', [SignatureProcedureController::class, 'signatureByUser']);
+        Route::post('/listautorized', [SignatureProcedureController::class, 'listAutorized']);
 
+
+    });
     Route::prefix('/procedure')->group(function () {
         Route::get('/index', [ProcedureController::class, 'index']);
         Route::get('/detailsprocedure/{created_at}/{departament_id}', [ProcedureController::class, 'detailsProcedure']);
