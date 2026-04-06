@@ -27,6 +27,7 @@ class User extends Authenticatable
         'departament_id',
         'password',
         'active',
+        'signature'
     ];
 
     /**

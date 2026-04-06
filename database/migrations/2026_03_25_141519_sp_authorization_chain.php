@@ -64,7 +64,7 @@ return new class extends Migration
         path as hierarchy_path
     FROM auth_path
     where authorized = 1
-    ORDER BY nivel ASC;  -- nivel 0 es el departamento original, nivel 1 es su padre, etc.
+    ORDER BY nivel asc;  -- nivel 0 es el departamento original, nivel 1 es su padre, etc.
 END
         ");
     }

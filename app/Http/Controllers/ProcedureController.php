@@ -15,6 +15,7 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ProcedureController extends Controller
 {
@@ -37,9 +38,13 @@ class ProcedureController extends Controller
             $status = Status::where('active', 1)->get();
             $procedures = ProceduresCreatedAt::query();
 
-            if (strtolower(Auth::user()->role) == 'administrador') {
-                // Administrador ve todos
-            } else if (strtolower(Auth::user()->role) == 'director') {
+            // Normalizar el rol a minúsculas para comparación consistente
+            $userRole = strtolower(trim(Auth::user()->role));
+
+            if ($userRole == 'administrativo') {  // ✅ Todo en minúsculas
+                // Administrador ve todos - sin filtros adicionales
+                // No se aplica ningún where
+            } else if ($userRole == 'director') {  // ✅ Todo en minúsculas
                 // Obtener el departamento del director
                 $directorDept = Departament::with('childrenRecursive')
                     ->find(Auth::user()->departament_id);
@@ -57,35 +62,37 @@ class ProcedureController extends Controller
                     ->where('departament_id', Auth::user()->departament_id);
             }
 
+            // Debug temporal para verificar la consulta
+
+
             $procedures = $procedures->orderByDesc('order_date')->get();
+
+            // Debug para ver cuántos registros encontró
 
             // Agregar cadena de autorización a cada procedimiento
             $procedures->each(function ($procedure) use ($status) {
                 $chain = SignedByProcedure::where('procedure_id', $procedure->id)->get();
 
-                $statusUpTo3 = $status->where('id', '<=', 3)
-                    ->map(function ($item) {
-                        return [
-                            'procedure_id' => 0,
-                            'name' => strtoupper($item->name),
-                            'active' => $item->active,
-                        ];
-                    })->values();
 
-                // $statusFrom4 = $status->where('id', '>=', 4)->where('id', '<', 6)
-                //     ->map(function ($item) {
-                //         return [
-                //             'procedure_id' => 0,
-                //             'name' => strtoupper($item->name),
-                //             'active' => $item->active,
-                //         ];
-                //     })->values();
-
-                $procedure->authorization_chain = array_merge(
-                    $statusUpTo3->toArray(),
-                    $chain->toArray(),
-                    // $statusFrom4->toArray()
-                );
+                // Construir la cadena de autorización según el estado del procedimiento
+             
+                    $statusUpTo3 = $status->where('id', '<=', 3)
+                        ->map(function ($item) {
+                            return [
+                                'procedure_id' => 0,
+                                'name' => strtoupper($item->name),
+                                'active' => $item->active ?? 0,
+                                'status' => $item->active ? 'completado' : 'pendiente',
+                                'position' => $item->id,
+                                'type' => 'base'
+                            ];
+                        })->values();
+                    // Procedimiento normal: combinar estados base + firmas reales
+                    $procedure->authorization_chain = array_merge(
+                        $statusUpTo3->toArray(),
+                        $chain->toArray()
+                    );
+                
             });
 
             return ApiResponse::success($procedures, 'Procesos obtenidos correctamente');
@@ -93,7 +100,6 @@ class ProcedureController extends Controller
             return ApiResponse::error('Ocurrió un error: ' . $e->getMessage(), 500);
         }
     }
-
     /**
      * Obtiene recursivamente todos los IDs de departamentos incluyendo hijos
      */
@@ -111,7 +117,7 @@ class ProcedureController extends Controller
 
         return array_unique($ids); // Eliminar duplicados por si acaso
     }
-    
+
 
     public function createOrUpdate(Request $request)
     {
@@ -122,7 +128,7 @@ class ProcedureController extends Controller
             foreach ($items as $item) {
                 $process = $processes->firstWhere('id', $item['process_id']);
                 $chain = DB::select('CALL sp_authorization_chain(?)', [$process ? $process->departament_id : Auth::user()->departament_id]);
-
+                
                 $data = [
                     'year' => $item['year'] ?? null,
 
@@ -148,11 +154,12 @@ class ProcedureController extends Controller
                     'location_position' => $item['location_position'] ?? false,
                     'observation' => $item['observation'] ?? null,
                     'errorDescriptionField' => $item['errorDescriptionField'] ?? null,
-                    'error' => !empty($item['error']) ? false : !empty($item['errorDescriptionField']),
-                    'statu_id' => !empty($item['error']) ? 2 : ($item['statu_id'] ?? 2),
+                    'error' => !empty($item['error']) ?? false ,
+                    'statu_id' => !empty($item['errorDescriptionField']) ? 4 : ($item['statu_id'] ?? 2),
                     'errorFieldsKey' => $item['errorFieldsKey'] ?? null,
 
                 ];
+
 
 
                 // Check if the item has an ID (update)
@@ -162,6 +169,7 @@ class ProcedureController extends Controller
 
                     if ($procedure) {
                         // Update the existing procedure
+                        unset($data['user_id']);
                         $procedure->update($data);
                         $procedures[] = $procedure;
                     } else {
@@ -328,6 +336,7 @@ class ProcedureController extends Controller
         $namePaths[$department->id] = $fullPath;
         return $fullPath;
     }
+
     public function detailsProcedure($created_at, $departament_id = 0)
     {
         try {
@@ -339,17 +348,19 @@ class ProcedureController extends Controller
             $date = date('Y-m-d', strtotime($created_at));
 
             // Query base
-            $query = Procedure::select('procedures.*', 'p.name as process', 's.name as status', 'p.classification_code', 'u.fullName as user_created')
-                ->join('proccess as p', 'p.id', 'procedures.process_id')
-                ->join('status as s', 's.id', 'procedures.statu_id')
-                ->join('users as u', 'u.id', 'procedures.user_id')
+            $query = Procedure::select('procedures.*', 'p.name as process', 's.name as status', 'u.signature as signature', 'p.classification_code', 'u.fullName as user_created', 'r.fullName as reviewed_user', 'r.signature as reviewed_signature')
+                ->leftJoin('proccess as p', 'p.id', 'procedures.process_id')
+                ->leftJoin('status as s', 's.id', 'procedures.statu_id')
+                ->leftJoin('users as u', 'u.id', 'procedures.user_id')
+                ->leftJoin('users as r', 'r.id', 'procedures.reviewed_by')
+
                 ->orderBy('procedures.id');
 
             // Aplicar filtros según el rol del usuario
-            if ($user->role == 'administrador') {
+            if (strtolower($user->role) == 'administrativo') {
                 $query->where('procedures.departament_id', $departament_id);
             } else if (strtolower($user->role) == 'director') {
-              $query->where('procedures.departament_id', $departament_id);
+                $query->where('procedures.departament_id', $departament_id);
             } else {
                 $query->where('procedures.departament_id', $user->departament_id);
             }
@@ -358,7 +369,7 @@ class ProcedureController extends Controller
             $query->whereDate('procedures.created_at', $date);
 
             $allProcedures = $query->get();
-
+            // return $allProcedures;
             // Determinar el departamento a filtrar según rol
             $deptFilter = ($user->role == 'administrador') ? $departament_id : $user->departament_id;
 
@@ -382,7 +393,8 @@ class ProcedureController extends Controller
 
                 $consecutiveByYear[$year]++;
                 $consecutive = str_pad($consecutiveByYear[$year], 3, '0', STR_PAD_LEFT);
-
+                $item->signature_b64         = $this->imageToBase64($item->signature);
+                $item->reviewed_signature_b64 = $this->imageToBase64($item->reviewed_signature);
                 $deptId = $item->departament_id;
                 $item->fileNumber  = ($paths[$deptId] ?? '') . '-' . $consecutive;
                 $item->archiveCode = $rootCodes[$deptId] . "-" . $item->classification_code . "/" . ($paths[$deptId] ?? '') . '-' . $consecutive . '/' . $year;
@@ -394,15 +406,25 @@ class ProcedureController extends Controller
 
             return ApiResponse::success($allProcedures, 'Procesos obtenidos correctamente');
         } catch (Exception $e) {
-            return ApiResponse::error('ocurrio un error', 500);
+            return ApiResponse::error($e->getMessage(), 500);
         }
     }
-
     public function changeStatus(Request $request)
     {
         try {
-            $procedure = Procedure::whereRaw('DATE(created_at) = ?', [Carbon::parse($request->startDate)->format('Y-m-d')])
-                ->where('departament_id', $request->departament_id)->update(["statu_id" => $request->status]);
+            $updateData = [
+                'statu_id' => $request->status
+            ];
+
+            if ($request->status == 3) {
+                $updateData['reviewed_by'] = Auth::user()->id;
+            }
+
+            $procedure = Procedure::whereRaw('DATE(created_at) = ?', [
+                Carbon::parse($request->startDate)->format('Y-m-d')
+            ])
+                ->where('departament_id', $request->departament_id)
+                ->update($updateData);
             return ApiResponse::success($procedure, 'Procesos actualizados correctamente');
         } catch (Exception $e) {
             return ApiResponse::error('ocurrio un error', 500);

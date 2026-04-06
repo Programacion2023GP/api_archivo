@@ -15,6 +15,7 @@ class Procedure extends Model
         'process_id',
         // 'fileNumber',
         // 'archiveCode',
+        'reviewed_by',
         'user_id',
         'departament_id',
         'startDate',

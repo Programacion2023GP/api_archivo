@@ -20,6 +20,10 @@ return new class extends Migration
 
             $table->foreignId('process_id')->index();
             $table->foreignId('user_id')->index();
+            $table->foreignId('reviewed_by')
+            ->nullable()
+                ->constrained('users')
+                ->cascadeOnDelete();
             $table->foreignId('departament_id')->index();
             $table->text('description')->nullable();
             $table->boolean('fisic')->default(false);

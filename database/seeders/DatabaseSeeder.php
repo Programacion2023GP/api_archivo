@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -45,6 +46,10 @@ class DatabaseSeeder extends Seeder
             ['name' => 'catalogo_tramite_crear', 'active' => true],
             ['name' => 'catalogo_tramite_actualizar', 'active' => true],
             ['name' => 'catalogo_tramite_eliminar', 'active' => true],
+            ['name' => 'usuarios_subirfirmas', 'active' => true],
+            ['name' => 'revisar', 'active' => true],
+
+
         ];
 
         foreach ($permissions as $permission) {
@@ -58,7 +63,7 @@ class DatabaseSeeder extends Seeder
         $status = [
             ['name' => 'captura', 'active' => true],
             ['name' => 'enviado', 'active' => true],
-            // ['name' => 'autorizado', 'active' => true],
+            ['name' => 'revisado', 'active' => true],
             
             // ['name' => 'finalizado', 'active' => true],
             ['name' => 'rechazado', 'active' => true],
@@ -74,69 +79,153 @@ class DatabaseSeeder extends Seeder
         }
 
         // Verificar si el usuario ya existe
-        $existingUser = DB::table('users')->where('payroll', 'admin')->first();
-        
-        if (!$existingUser) {
-            // Crear usuario admin si no existe
-            $userId = DB::table('users')->insertGetId([
+        DB::table('users')->insert([
+            [
+                'id' => 1,
                 'firstName' => 'Administrador',
-                'active' => 1,
                 'paternalSurname' => 'Administrador',
                 'maternalSurname' => 'Administrador',
+             
                 'payroll' => 'admin',
-                'role' => 'administrador',
-                'password' => Hash::make("desarrollo"),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } else {
-            $userId = $existingUser->id;
-            $this->command->info('Usuario admin ya existe, ID: ' . $userId);
-        }
+                'role' => 'administrativo',
+                'departament_id' => null,
+                'password' => Hash::make('desarrollo'), // 🔥 especial
+                'active' => 1,
+                'created_at' => Carbon::parse('2026-03-31 14:13:01'),
+                'updated_at' => Carbon::parse('2026-03-31 14:13:01'),
+            ],
+            [
+                'id' => 2,
+                'firstName' => 'NESTOR JOSUE',
+                'paternalSurname' => 'PUENTES',
+                'maternalSurname' => 'INCHAURREGUI',
+                'payroll' => '612024',
+                'role' => 'Administrativo',
+                'departament_id' => 2,
+                'password' => Hash::make('612024'),
+                'active' => 1,
+                'created_at' => Carbon::parse('2026-03-31 14:14:54'),
+                'updated_at' => Carbon::parse('2026-03-31 14:14:54'),
+            ],
+            [
+                'id' => 3,
+                'firstName' => 'LUIS ANGEL',
+                'paternalSurname' => 'GUTIERREZ',
+                'maternalSurname' => 'HERNANDEZ',
+              
+                'payroll' => '612053',
+                'role' => 'Director',
+                'departament_id' => 2,
+                'password' => Hash::make('612053'),
+                'active' => 1,
+                'created_at' => Carbon::parse('2026-03-31 14:15:19'),
+                'updated_at' => Carbon::parse('2026-03-31 14:15:19'),
+            ],
+            [
+                'id' => 4,
+                'firstName' => 'YOSIMAR',
+                'paternalSurname' => 'RODRIGUEZ',
+                'maternalSurname' => 'PUGA',
+                'payroll' => '612025',
+                'role' => 'Director',
+                'departament_id' => 1,
+                'password' => Hash::make('612025'),
+                'active' => 1,
+                'created_at' => Carbon::parse('2026-03-31 14:15:36'),
+                'updated_at' => Carbon::parse('2026-03-31 14:15:36'),
+            ],
+            [
+                'id' => 5,
+                'firstName' => 'JOVANNY',
+                'paternalSurname' => 'ESTRADA',
+                'maternalSurname' => 'RIVERA',
+                'payroll' => '612022',
+                'role' => 'Usuario',
+                'departament_id' => 2,
+                'password' => Hash::make('612022'),
+                'active' => 1,
+                'created_at' => Carbon::parse('2026-03-31 14:16:01'),
+                'updated_at' => Carbon::parse('2026-03-31 14:16:01'),
+            ],
+        ]);
        
         // Asignar TODOS los permisos al admin
-        $permissionIds = DB::table('permissions')->pluck('id');
-        $asignados = 0;
-        
-        foreach ($permissionIds as $permissionId) {
-            // Verificar si ya tiene el permiso
-            $existe = DB::table('user_permissions')
+     
+        DB::table('departaments')->insert([
+            [
+                'id' => 1,
+                'name' => 'OFICIALIA MAYOR',
+                'departament_id' => null,
+                'abbreviation' => 'OR',
+                'classification_code' => '7S',
+                'authorized' => 0,
+                'active' => 1,
+                'created_at' => Carbon::parse('2026-03-31 13:57:59'),
+                'updated_at' => Carbon::parse('2026-03-31 13:57:59'),
+            ],
+            [
+                'id' => 2,
+                'name' => 'INFORMATICA',
+                'departament_id' => 1,
+                'abbreviation' => 'IA',
+                'classification_code' => 'SE1',
+                'authorized' => 0,
+                'active' => 1,
+                'created_at' => Carbon::parse('2026-03-31 13:58:14'),
+                'updated_at' => Carbon::parse('2026-03-31 13:58:14'),
+            ],
+        ]);
+        DB::table('proccess')->insert([
+            [
+                'id' => 1,
+                'classification_code' => '1.1',
+                'name' => 'DOCUMENTACION',
+                'description' => null,
+                'departament_id' => 2,
+                'at' => 1,
+                'ac' => 1,
+                'proccess_id' => null,
+                'active' => 1,
+                'created_at' => Carbon::parse('2026-03-31 13:58:29'),
+                'updated_at' => Carbon::parse('2026-03-31 13:58:29'),
+            ],
+        ]);
+        // Mostrar resumen
+
+        $now = Carbon::now();
+
+        // Get all permission IDs dynamically
+        $allPermissionIds = DB::table('permissions')
+            ->where('active', 1)
+            ->pluck('id')
+            ->toArray();
+
+        // Define which permissions each user should have
+        $userPermissions = [
+            1 => $allPermissionIds,  // Admin gets ALL active permissions
+            2 => [2, 4, 18],         // User 2: tramite_actualizar, tramite_ver, revisar
+            3 => [1, 2, 3, 4],       // User 3: Full tramite permissions
+            4 => [1, 2, 3, 4],       // User 4: Full tramite permissions
+            5 => [1, 2, 3, 4],       // User 5: Full tramite permissions
+        ];
+
+        foreach ($userPermissions as $userId => $permissionIds) {
+            // Remove existing permissions for this user
+            DB::table('user_permissions')
                 ->where('user_id', $userId)
-                ->where('permission_id', $permissionId)
-                ->exists();
-            
-            if (!$existe) {
+                ->delete();
+
+            // Insert new permissions
+            foreach ($permissionIds as $permissionId) {
                 DB::table('user_permissions')->insert([
                     'user_id' => $userId,
                     'permission_id' => $permissionId,
-                    'created_at' => now(),
-                    'updated_at' => now(),
+                    'created_at' => $now,
+                    'updated_at' => $now,
                 ]);
-                $asignados++;
             }
         }
-
-        // Mostrar resumen
-        $this->command->info('=================================');
-        $this->command->info('PERMISOS CREADOS: ' . count($permissions));
-        $this->command->info('PERMISOS ASIGNADOS: ' . $asignados);
-        $this->command->info('USUARIO ADMIN ID: ' . $userId);
-        $this->command->info('=================================');
-        
-        // Mostrar los permisos del admin
-        $permisosAdmin = DB::table('user_permissions')
-            ->join('permissions', 'user_permissions.permission_id', '=', 'permissions.id')
-            ->where('user_permissions.user_id', $userId)
-            ->select('permissions.name')
-            ->get()
-            ->pluck('name')
-            ->toArray();
-        
-        $this->command->info('Permisos del admin:');
-        foreach ($permisosAdmin as $permiso) {
-            $this->command->line(' - ' . $permiso);
-        }
-        $this->command->info('=================================');
+    
     }
 }
 

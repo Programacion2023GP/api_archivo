@@ -6,6 +6,8 @@ use App\Models\ApiResponse;
 use App\Models\User;
 use App\Models\UserPermission;
 use Error;
+use Exception;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,9 +15,38 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use League\Config\Exception\ValidationException;
 
 class UserController extends Controller
 {
+    public function signature(Request $request)
+    {
+        try {
+            $user = User::find($request->id);
+            if (!$user) {
+                return ApiResponse::error('No se encontro el usuario', 500);
+            }
+
+            if ($request->hasFile('signature')) {
+                $archivo = $request->file('signature');
+
+                // Guardar en el disco 'public'
+                $rutaRelativa = $archivo->store('images', 'public');
+
+                // Generar URL completa
+                $urlCompleta = asset('storage/' . $rutaRelativa);
+
+                $user->signature = $urlCompleta;
+                $user->save();
+
+                return ApiResponse::success($user, "Se agrego la firma");
+            }
+
+            return ApiResponse::error('No se envió ninguna firma', 400);
+        } catch (Exception $e) {
+            return ApiResponse::error('Ocurrio un error: ' . $e->getMessage(), 500);
+        }
+    }
     public function register(Request $request)
     {
         DB::beginTransaction();
@@ -59,8 +90,8 @@ class UserController extends Controller
                 $rawPassword = $request->payroll;
                 $user->password = Hash::make($rawPassword);
                 if ($request->role == 'Director') {
-                    if (User::where('departament_id',$request->departament_id)->where('role','Director')->first()) {
-                            return ApiResponse::error('Ya existe un director en el departamento', 404);
+                    if (User::where('departament_id', $request->departament_id)->where('role', 'Director')->first()) {
+                        return ApiResponse::error('Ya existe un director en el departamento', 404);
                     }
                 }
             }
@@ -131,12 +162,12 @@ class UserController extends Controller
             ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
             ->where('user_permissions.user_id', $user->id)
             ->pluck('permissions.name');        // Crear token
-$token = $user->createToken('auth_token', $permisos->toArray())->plainTextToken;
+        $token = $user->createToken('auth_token', $permisos->toArray())->plainTextToken;
 
         return ApiResponse::success([
             'user' => $user,
             'token' => $token,
-            'permisos'=>$permisos,
+            'permisos' => $permisos,
             'token_type' => 'Bearer',
         ], 'Login exitoso');
     }
@@ -185,7 +216,7 @@ $token = $user->createToken('auth_token', $permisos->toArray())->plainTextToken;
             );
         }
     }
-    
+
     public function destroy(Request $request)
     {
         try {

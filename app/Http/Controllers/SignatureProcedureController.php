@@ -34,13 +34,21 @@ class SignatureProcedureController extends Controller
     {
         try {
             $results = DB::table('signatures_procedure')
-                ->select('signatures_procedure.*', 'u.fullName')
+                ->select('signatures_procedure.*', 'u.fullName', 'u.signature')
                 ->join('users as u', 'u.id', '=', 'signatures_procedure.user_id')
                 ->where('procedure_id', $request->procedure_id)
                 ->where('signedBy', 1)
                 ->get();
 
-            return ApiResponse::success($results, 'Firmado');
+            $results = $results->map(function ($item) {
+                // Convertir la firma a base64
+                $item->signature_b64 = $this->imageToBase64($item->signature);
+
+                // Opcional: mantener la URL original si la necesitas
+
+                return $item;
+            });
+            return ApiResponse::success($results, null);
         } catch (Exception $e) {
             Log::error("signatureByUser : " . $e->getMessage());
             return ApiResponse::error('Ocurrió un error', 500);

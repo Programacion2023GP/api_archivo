@@ -11,21 +11,24 @@ return new class extends Migration
      */
     public function up(): void
     {
+        DB::statement('DROP VIEW IF EXISTS signedbyprocedure');
+
         DB::statement("
-      CREATE 
+  CREATE 
   
 VIEW `signedbyprocedure` AS
-       SELECT 
+     SELECT 
         `sp`.`id` AS `id`,
         `sp`.`user_id` AS `user_id`,
         `sp`.`procedure_id` AS `procedure_id`,
         `u`.`fullName` AS `name`,
         `d`.`name` AS `group`,
         `sp`.`signedBy` AS `signedBy`
-    FROM
+    FROM 
         ((`signatures_procedure` `sp`
         JOIN `users` `u` ON ((`u`.`id` = `sp`.`user_id`)))
         JOIN `departaments` `d` ON ((`d`.`id` = `u`.`departament_id`)))
+        ORDER BY sp.id ASC
         ");
     }
 

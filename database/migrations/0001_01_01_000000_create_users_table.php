@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('firstName');
             $table->string('paternalSurname');
+            $table->string('signature')->nullable();
             $table->string('maternalSurname')->nullable();
             $table->string('fullName')->storedAs('CONCAT(firstName, " ",paternalSurname, " ", maternalSurname)');
             $table->string('payroll')->unique();
