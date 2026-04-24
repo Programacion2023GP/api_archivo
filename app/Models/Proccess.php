@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Proccess extends Model
 {
-    protected $primaryKey = 'id';
+    
+protected $primaryKey = 'id';
     protected $table = 'proccess';
     protected $fillable = ['name','at','ac', 'description', 'departament_id', 'classification_code', 'proccess_id', 'active'];
     public function children()

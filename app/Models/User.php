@@ -24,6 +24,7 @@ class User extends Authenticatable
         'maternalSurname',
         'payroll',
         'role',
+        'signature_position',
         'departament_id',
         'password',
         'active',

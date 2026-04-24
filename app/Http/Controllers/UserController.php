@@ -47,6 +47,28 @@ class UserController extends Controller
             return ApiResponse::error('Ocurrio un error: ' . $e->getMessage(), 500);
         }
     }
+    public function signature_position(Request $request)
+    {
+        try {
+            $user = User::find($request->id);
+            if (!$user) {
+                return ApiResponse::error('No se encontro el usuario', 500);
+            }
+
+
+                // Guardar en el disco 'public'
+
+                // Generar URL completa
+
+                $user->signature_position = $request->signature_position;
+                $user->save();
+
+                return ApiResponse::success($user, "Se agrego la firma");
+          
+        } catch (Exception $e) {
+            return ApiResponse::error('Ocurrio un error: ' . $e->getMessage(), 500);
+        }
+    }
     public function register(Request $request)
     {
         DB::beginTransaction();
@@ -181,41 +203,42 @@ class UserController extends Controller
 
         return ApiResponse::success(null, 'Logout exitoso');
     }
-    public function index()
-    {
-        try {
-            $users = User::where('payroll', '!=', '000000')
-                ->leftJoin('user_permissions', 'users.id', '=', 'user_permissions.user_id')
-                ->leftJoin('permissions', 'user_permissions.permission_id', '=', 'permissions.id')
-                ->leftJoin('departaments', 'departaments.id', '=', 'users.departament_id')
+        public function index()
+        {
+            try {
+                $users = User::where('payroll', '!=', '000000')
+                    ->leftJoin('user_permissions', 'users.id', '=', 'user_permissions.user_id')
+                    ->leftJoin('permissions', 'user_permissions.permission_id', '=', 'permissions.id')
+                    ->leftJoin('departaments', 'departaments.id', '=', 'users.departament_id')
 
-                ->select(
-                    'users.*',
-                    'departaments.name as departament',
-                    DB::raw('GROUP_CONCAT(permissions.id) as permission_ids')
-                )
-                ->groupBy('users.id')
-                ->get()
-                ->map(function ($user) {
-                    $userArray = $user->toArray();
-                    // Convertir los IDs de permisos de string a array de números
-                    $userArray['permissions'] = $user->permission_ids
-                        ? array_map('intval', explode(',', $user->permission_ids))
-                        : [];
-                    return $userArray;
-                });
+                    ->select(
+                        'users.*',
+                        'departaments.name as departament',
+                        DB::raw('GROUP_CONCAT(permissions.id) as permission_ids')
+                    )
+                    ->groupBy('users.id')
+                    ->orderBy('users.id','desc')
+                    ->get()
+                    ->map(function ($user) {
+                        $userArray = $user->toArray();
+                        // Convertir los IDs de permisos de string a array de números
+                        $userArray['permissions'] = $user->permission_ids
+                            ? array_map('intval', explode(',', $user->permission_ids))
+                            : [];
+                        return $userArray;
+                    });
 
-            return ApiResponse::success(
-                $users,
-                'Lista de usuarios'
-            );
-        } catch (\Exception $th) {
-            return ApiResponse::success(
-                null,
-                'No se pudo cargar los usuarios'
-            );
+                return ApiResponse::success(
+                    $users,
+                    'Lista de usuarios'
+                );
+            } catch (\Exception $th) {
+                return ApiResponse::success(
+                    null,
+                    'No se pudo cargar los usuarios'
+                );
+            }
         }
-    }
 
     public function destroy(Request $request)
     {

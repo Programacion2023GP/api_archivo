@@ -3,11 +3,14 @@
 namespace App\Providers;
 
 use App\Models\Court;
+use App\Models\Departament;
 use App\Models\Dependence;
 use App\Models\Doctor;
 use Illuminate\Support\ServiceProvider;
 use App\Models\Log; // porque quieres excluirlo
 use App\Models\Penalty;
+use App\Models\Proccess;
+use App\Models\Procedure;
 use App\Models\Publicsecurities;
 use App\Models\Traffic;
 use App\Models\User;
@@ -33,8 +36,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot()
     {
         User::observe(GenericObserver::class);
-    
-
-        
+        Departament::observe(GenericObserver::class);
+        Proccess::observe(GenericObserver::class);
+        Procedure::observe(GenericObserver::class);
     }
 }

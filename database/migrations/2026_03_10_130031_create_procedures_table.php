@@ -33,13 +33,14 @@ return new class extends Migration
             $table->boolean('legal_value')->default(false);
             $table->integer('retention_period_current')->default(false);
             $table->integer('retention_period_archive')->default(false);
-            $table->boolean('location_building')->default(false);
-            $table->boolean('location_furniture')->default(false);
-            $table->boolean('location_position')->default(false);
+            $table->integer('location_building')->nullable()->default(0);
+            $table->integer('location_furniture')->nullable()->default(0);
+            $table->integer('location_position')->nullable()->default(0);
             $table->text('errorDescriptionField')->nullable();
             $table->text('errorFieldsKey')->nullable();
             $table->boolean('error')->default(false);
-
+            $table->string('file_number')->nullable();
+            $table->string('archive_code')->nullable();
             $table->date('startDate')->nullable();
             $table->date('endDate')->nullable();
             $table->integer('totalPages')->nullable();

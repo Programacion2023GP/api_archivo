@@ -1,10 +1,10 @@
 <?php
 
+use App\Http\Controllers\Api\LogController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 
 use App\Http\Controllers\PermissionController;
-use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\DepartamentController;
 use App\Http\Controllers\PenaltyController;
 use App\Http\Controllers\ProccessController;
@@ -28,7 +28,6 @@ Route::prefix('/users')->group(
 
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/logs', [LogController::class, 'index']);
     // Rutas protegidas por Sanctum
     Route::prefix('/departaments')->group(function () {
         Route::get('/index', [DepartamentController::class, 'index']);
@@ -79,13 +78,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/createorUpdate', [UserController::class, 'register']);
         Route::post('/signature', [UserController::class, 'signature']);
-
+        Route::post('/signature_position', [UserController::class, 'signature_position']);
+        
         
         Route::get('/index', [UserController::class, 'index']);
         Route::delete('/delete', [UserController::class, 'destroy']);
     });
+    Route::prefix('/logs')->group(function () {
 
-
+        Route::get('/', [LogController::class, 'index']);
+      
+    });
+    // routes/api.php
     // Dependencias
 
     // Procedimientos

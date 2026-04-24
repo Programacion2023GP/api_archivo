@@ -15,6 +15,7 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class ProcedureController extends Controller
@@ -38,23 +39,18 @@ class ProcedureController extends Controller
             $status = Status::where('active', 1)->get();
             $procedures = ProceduresCreatedAt::query();
 
-            // Normalizar el rol a minúsculas para comparación consistente
             $userRole = strtolower(trim(Auth::user()->role));
 
-            if ($userRole == 'administrativo') {  // ✅ Todo en minúsculas
-                // Administrador ve todos - sin filtros adicionales
-                // No se aplica ningún where
-            } else if ($userRole == 'director') {  // ✅ Todo en minúsculas
-                // Obtener el departamento del director
+            // Filtros por rol (sin cambios)
+            if ($userRole == 'administrativo') {
+                // administrador ve todos
+            } else if ($userRole == 'director') {
                 $directorDept = Departament::with('childrenRecursive')
                     ->find(Auth::user()->departament_id);
-
                 if ($directorDept) {
-                    // Obtener todos los IDs de departamentos (incluyendo el propio y todos los hijos recursivos)
                     $departmentIds = $this->getAllDepartmentIds($directorDept);
                     $procedures = $procedures->whereIn('departament_id', $departmentIds);
                 } else {
-                    // Fallback: solo su propio departamento
                     $procedures = $procedures->where('departament_id', Auth::user()->departament_id);
                 }
             } else {
@@ -62,43 +58,80 @@ class ProcedureController extends Controller
                     ->where('departament_id', Auth::user()->departament_id);
             }
 
-            // Debug temporal para verificar la consulta
-
-
             $procedures = $procedures->orderByDesc('order_date')->get();
 
-            // Debug para ver cuántos registros encontró
-
-            // Agregar cadena de autorización a cada procedimiento
+            // Para cada procedimiento, construir la cadena completa
             $procedures->each(function ($procedure) use ($status) {
-                $chain = SignedByProcedure::where('procedure_id', $procedure->id)->get();
+                // 1. Obtener firmantes requeridos desde el procedimiento almacenado
+                $requiredSigners = $this->getRequiredSigners($procedure->departament_id);
 
+                // 2. Obtener firmas ya realizadas
+                $signed = SignedByProcedure::where('procedure_id', $procedure->id)
+                    ->get()
+                    ->keyBy('user_id'); // índice por user_id
 
-                // Construir la cadena de autorización según el estado del procedimiento
-             
-                    $statusUpTo3 = $status->where('id', '<=', 3)
-                        ->map(function ($item) {
-                            return [
-                                'procedure_id' => 0,
-                                'name' => strtoupper($item->name),
-                                'active' => $item->active ?? 0,
-                                'status' => $item->active ? 'completado' : 'pendiente',
-                                'position' => $item->id,
-                                'type' => 'base'
-                            ];
-                        })->values();
-                    // Procedimiento normal: combinar estados base + firmas reales
-                    $procedure->authorization_chain = array_merge(
-                        $statusUpTo3->toArray(),
-                        $chain->toArray()
-                    );
-                
+                // 3. Construir la cadena combinada
+                $chain = [];
+
+                // Estados base (solicitud, revisión, etc.) – opcional, puedes mantenerlos
+                $statusUpTo3 = $status->where('id', '<=', 3)
+                    ->map(function ($item) use ($procedure) {
+                        return [
+                            'procedure_id' => 0,
+                            'name' => strtoupper($item->name),
+                            'active' => $item->active ?? 0,
+                            'status' => $procedure->statu_id > $item->id ? 'completado' : 'pendiente',
+                            'position' => $item->id,
+                            'type' => 'base'
+                        ];
+                    })->values();
+                $chain = array_merge($chain, $statusUpTo3->toArray());
+
+                // 4. Agregar cada firmante requerido con su estado real
+                foreach ($requiredSigners as $signer) {
+                    $alreadySigned = $signed->has($signer['user_id']);
+                    $chain[] = [
+                        'procedure_id' => $procedure->id,
+                        'user_id' => $signer['user_id'],
+                        'name' => $signer['name'],
+                        'group' => $signer['group'],
+                        'level' => $signer['level'],
+                        'status' => $alreadySigned ? 'completado' : 'pendiente',
+                        'signed_at' => $alreadySigned ? $signed[$signer['user_id']]->created_at : null,
+                        'type' => 'signature'
+                    ];
+                }
+
+                $procedure->authorization_chain = $chain;
             });
 
             return ApiResponse::success($procedures, 'Procesos obtenidos correctamente');
         } catch (Exception $e) {
             return ApiResponse::error('Ocurrió un error: ' . $e->getMessage(), 500);
         }
+    }
+
+    /**
+     * Ejecuta el procedimiento almacenado sp_authorization_chain
+     * y devuelve los firmantes requeridos (directores + usuarios con signature_position)
+     */
+    private function getRequiredSigners($departament_id)
+    {
+        $results = DB::select('CALL sp_authorization_chain(?)', [$departament_id]);
+        // Limpiar la conexión porque CALL puede dejar resultados pendientes (MySQL)
+        DB::disconnect(); // o DB::connection()->getPdo()->nextRowset();
+        return collect($results)->map(function ($row) {
+            return [
+                'user_id' => $row->user_id,
+                'name' => $row->name,
+                'group' => $row->group,
+                'level' => $row->level,
+                'department_id' => $row->department_id
+            ];
+        })->filter(function ($signer) {
+            // Solo los que tienen user_id válido (los grupos sin director tienen null)
+            return !is_null($signer['user_id']);
+        })->values()->toArray();
     }
     /**
      * Obtiene recursivamente todos los IDs de departamentos incluyendo hijos
@@ -122,82 +155,90 @@ class ProcedureController extends Controller
     public function createOrUpdate(Request $request)
     {
         try {
-            $items = $request->all(); // arreglo que envía React
+            $items     = $request->all();
             $procedures = [];
-            $processes = Proccess::select('id', 'departament_id')->get();
+            $processes  = Proccess::select('id', 'departament_id')->get();
+
+            // Pre-cargar departamentos y construir paths UNA sola vez
+            $allDepartments = Departament::all()->keyBy('id');
+            [$paths, $namePaths, $rootNames, $rootCodes] = $this->buildPaths($allDepartments);
+
+            // Contador de consecutivos por dept+year para este batch
+            $consecutiveByYearDept = [];
+
             foreach ($items as $item) {
-                $process = $processes->firstWhere('id', $item['process_id']);
-                $chain = DB::select('CALL sp_authorization_chain(?)', [$process ? $process->departament_id : Auth::user()->departament_id]);
-                
+                $process       = $processes->firstWhere('id', $item['process_id']);
+                $departamentId = $process ? $process->departament_id : Auth::user()->departament_id;
+                $chain         = DB::select('CALL sp_authorization_chain(?)', [$departamentId]);
+                $year          = $item['year'] ?? null;
+
                 $data = [
-                    'year' => $item['year'] ?? null,
-
-                    'boxes' => $item['boxes'] ?? null,
-                    // 'fileNumber' => $item['fileNumber'] ?? null,
-                    // 'archiveCode' => $item['archiveCode'] ?? null,
-                    'process_id' => $item['process_id'] ?? null,
-                    'user_id' => Auth::user()->id,
-                    'departament_id' => $process ? $process->departament_id : Auth::user()->departament_id, // Usa el departamento del proceso o el del usuario
-                    'description' => $item['description'] ?? null,
-                    'fisic' => $item['fisic'] ?? false,
-                    'electronic' => $item['electronic'] ?? false,
-                    'startDate' => $item['startDate'] ?? null,
-                    'endDate' => $item['endDate'] ?? null,
-                    'totalPages' => $item['totalPages'] ?? null,
-                    'administrative_value' => $item['administrative_value'] ?? false,
-                    'accounting_fiscal_value' => $item['accounting_fiscal_value'] ?? false,
-                    'legal_value' => $item['legal_value'] ?? false,
-                    'retention_period_current' => $item['retention_period_current'] ?? false,
-                    'retention_period_archive' => $item['retention_period_archive'] ?? false,
-                    'location_building' => $item['location_building'] ?? false,
-                    'location_furniture' => $item['location_furniture'] ?? false,
-                    'location_position' => $item['location_position'] ?? false,
-                    'observation' => $item['observation'] ?? null,
-                    'errorDescriptionField' => $item['errorDescriptionField'] ?? null,
-                    'error' => !empty($item['error']) ?? false ,
-                    'statu_id' => !empty($item['errorDescriptionField']) ? 4 : ($item['statu_id'] ?? 2),
-                    'errorFieldsKey' => $item['errorFieldsKey'] ?? null,
-
+                    'year'                      => $year,
+                    'boxes'                     => $item['boxes']                     ?? null,
+                    'process_id'                => $item['process_id']                ?? null,
+                    'user_id'                   => Auth::user()->id,
+                    'departament_id'            => $departamentId,
+                    'description'               => $item['description']               ?? null,
+                    'fisic'                     => $item['fisic']                     ?? false,
+                    'electronic'                => $item['electronic']                ?? false,
+                    'startDate'                 => $item['startDate']                 ?? null,
+                    'endDate'                   => $item['endDate']                   ?? null,
+                    'totalPages'                => $item['totalPages']                ?? null,
+                    'administrative_value'      => $item['administrative_value']      ?? false,
+                    'accounting_fiscal_value'   => $item['accounting_fiscal_value']   ?? false,
+                    'legal_value'               => $item['legal_value']              ?? false,
+                    'retention_period_current'  => $item['retention_period_current']  ?? false,
+                    'retention_period_archive'  => $item['retention_period_archive']  ?? false,
+                    'location_building'         => $item['location_building']         ?? null,
+                    'location_furniture'        => $item['location_furniture']        ?? null,
+                    'location_position'         => $item['location_position']         ?? null,
+                    'observation'               => $item['observation']               ?? null,
+                    'errorDescriptionField'     => $item['errorDescriptionField']     ?? null,
+                    'error'                     => !empty($item['error'])             ?? false,
+                    'statu_id'                  => !empty($item['errorDescriptionField']) ? 4 : ($item['statu_id'] ?? 2),
+                    'errorFieldsKey'            => $item['errorFieldsKey']            ?? null,
                 ];
 
-
-
-                // Check if the item has an ID (update)
                 if (isset($item['id']) && !empty($item['id'])) {
-                    // Find the existing procedure
                     $procedure = Procedure::find($item['id']);
-
                     if ($procedure) {
-                        // Update the existing procedure
                         unset($data['user_id']);
                         $procedure->update($data);
                         $procedures[] = $procedure;
-                    } else {
-                        // Handle case where ID is provided but procedure doesn't exist
-                        // Option 1: Create new with the provided ID (may cause issues if ID exists)
-                        $data['id'] = $item['id'];
-                        $procedures[] = $procedure;
-                        foreach ($chain as $item) {
-                            SignaturesProcedure::create([
-                                "procedure_id" => $procedure->id,
-                                "user_id" => $item->user_id,
-
-                            ]);
-                        }
-                        // Option 2: Skip or return error
-                        // throw new Exception("Procedure with ID {$item['id']} not found");
+                        continue; // En update no recalculamos consecutivo
                     }
-                } else {
-                    // Create new procedure
-                    $procedure = Procedure::create($data);
-                    $procedures[] = $procedure;
-                    foreach ($chain as $item) {
-                        SignaturesProcedure::create([
-                            "procedure_id" => $procedure->id,
-                            "user_id" => $item->user_id,
+                }
 
-                        ]);
-                    }
+                // ── Consecutivo al momento de crear ──────────────────────────
+                $key = "{$departamentId}_{$year}";
+
+                if (!isset($consecutiveByYearDept[$key])) {
+                    // Total de registros YA existentes para ese dept+año
+                    $consecutiveByYearDept[$key] = Procedure::where('departament_id', $departamentId)
+                        ->where('year', $year)
+                        ->count();
+                }
+
+                $consecutiveByYearDept[$key]++;
+                $consecutive = str_pad($consecutiveByYearDept[$key], 3, '0', STR_PAD_LEFT);
+
+                // Calcular y guardar directamente en el registro
+                $classificationCode         = optional($process)->classification_code;
+                $data['file_number']        = ($paths[$departamentId] ?? '') . '-' . $consecutive;
+                $data['archive_code']       = ($rootCodes[$departamentId] ?? '')
+                    . '-' . $classificationCode
+                    . '/' . ($paths[$departamentId] ?? '')
+                    . '-' . $consecutive
+                    . '/' . $year;
+
+                $procedure    = Procedure::create($data);
+                $procedures[] = $procedure;
+
+                foreach ($chain as $chainItem) {
+                    SignaturesProcedure::create([
+                        'procedure_id' => $procedure->id,
+                        'user_id'      => $chainItem->user_id,
+                    ]);
                 }
             }
 
@@ -341,65 +382,50 @@ class ProcedureController extends Controller
     {
         try {
             $user = Auth::user();
-            $allDepartments = Departament::all()->keyBy('id');
-
-            [$paths, $namePaths, $rootNames, $rootCodes] = $this->buildPaths($allDepartments);
-
             $date = date('Y-m-d', strtotime($created_at));
 
-            // Query base
-            $query = Procedure::select('procedures.*', 'p.name as process', 's.name as status', 'u.signature as signature', 'p.classification_code', 'u.fullName as user_created', 'r.fullName as reviewed_user', 'r.signature as reviewed_signature')
+            $query = Procedure::select(
+                'procedures.*',
+                'p.name as process',
+                's.name as status',
+                'u.signature as signature',
+                'p.classification_code',
+                'u.fullName as user_created',
+                'r.fullName as reviewed_user',
+                'r.signature as reviewed_signature'
+            )
                 ->leftJoin('proccess as p', 'p.id', 'procedures.process_id')
-                ->leftJoin('status as s', 's.id', 'procedures.statu_id')
-                ->leftJoin('users as u', 'u.id', 'procedures.user_id')
-                ->leftJoin('users as r', 'r.id', 'procedures.reviewed_by')
-
+                ->leftJoin('status as s',   's.id', 'procedures.statu_id')
+                ->leftJoin('users as u',    'u.id', 'procedures.user_id')
+                ->leftJoin('users as r',    'r.id', 'procedures.reviewed_by')
+                ->whereDate('procedures.created_at', $date)
                 ->orderBy('procedures.id');
 
-            // Aplicar filtros según el rol del usuario
-            if (strtolower($user->role) == 'administrativo') {
-                $query->where('procedures.departament_id', $departament_id);
-            } else if (strtolower($user->role) == 'director') {
-                $query->where('procedures.departament_id', $departament_id);
-            } else {
-                $query->where('procedures.departament_id', $user->departament_id);
-            }
+            $deptFilter = in_array(strtolower($user->role), ['administrativo', 'director'])
+                ? $departament_id
+                : $user->departament_id;
 
-            // Filtrar por fecha
-            $query->whereDate('procedures.created_at', $date);
+            $query->where('procedures.departament_id', $deptFilter);
 
             $allProcedures = $query->get();
-            // return $allProcedures;
-            // Determinar el departamento a filtrar según rol
-            $deptFilter = ($user->role == 'administrador') ? $departament_id : $user->departament_id;
 
-            // Obtener el offset de registros anteriores al día consultado, agrupado por año
-            $offsetByYear = Procedure::select('year', DB::raw('COUNT(*) as total'))
-                ->where('departament_id', $deptFilter)
-                ->whereDate('created_at', '<', $date)
-                ->groupBy('year')
-                ->pluck('total', 'year')
-                ->toArray();
+            // ── Cache de firmas: convierte cada path UNA sola vez ────────────
+            $signatureCache = [];
 
-            $consecutiveByYear = [];
+            $toBase64Cached = function (?string $path) use (&$signatureCache): ?string {
+              
+                    $signatureCache[$path] = $this->imageToBase64($path);
+                
+                return $signatureCache[$path];
+            };
 
-            $allProcedures = $allProcedures->map(function ($item) use (&$consecutiveByYear, $offsetByYear, $paths, $namePaths, $rootNames, $rootCodes) {
-                $year = $item->year;
+            $allProcedures = $allProcedures->map(function ($item) use ($toBase64Cached) {
+                $item->fileNumber  = $item->file_number;
+                $item->archiveCode = $item->archive_code;
 
-                if (!isset($consecutiveByYear[$year])) {
-                    // Empieza desde el total de registros previos a este día
-                    $consecutiveByYear[$year] = $offsetByYear[$year] ?? 0;
-                }
-
-                $consecutiveByYear[$year]++;
-                $consecutive = str_pad($consecutiveByYear[$year], 3, '0', STR_PAD_LEFT);
-                $item->signature_b64         = $this->imageToBase64($item->signature);
-                $item->reviewed_signature_b64 = $this->imageToBase64($item->reviewed_signature);
-                $deptId = $item->departament_id;
-                $item->fileNumber  = ($paths[$deptId] ?? '') . '-' . $consecutive;
-                $item->archiveCode = $rootCodes[$deptId] . "-" . $item->classification_code . "/" . ($paths[$deptId] ?? '') . '-' . $consecutive . '/' . $year;
-                $item->serie       = $namePaths[$deptId] ?? '';
-                $item->departament = $rootNames[$deptId] ?? '';
+                // Firma: una conversión por path único
+                $item->signature_b64          = $toBase64Cached($item->signature);
+                $item->reviewed_signature_b64 = $toBase64Cached($item->reviewed_signature);
 
                 return $item;
             });

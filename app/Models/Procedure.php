@@ -13,6 +13,10 @@ class Procedure extends Model
 
         'boxes',
         'process_id',
+        'file_number',
+        'archive_code',
+
+
         // 'fileNumber',
         // 'archiveCode',
         'reviewed_by',

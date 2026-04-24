@@ -15,7 +15,7 @@ class ProccessController extends Controller
     public function createorUpdate(Request $request)
     {
         try {
-       
+
             $data = [
                 'name' => $request->name,
                 'departament_id' => $request->departament_id,
@@ -23,7 +23,7 @@ class ProccessController extends Controller
                 'description' => $request->description,
                 'at' => $request->at,
                 'ac' => $request->ac,
-                'proccess_id'=> $request->proccess_id,
+                'proccess_id' => $request->proccess_id,
 
             ];
 
@@ -61,6 +61,7 @@ class ProccessController extends Controller
                 'ac'               => $item->ac,
                 'total'               => $item->total,
                 'description'               => $item->description,
+                'active'               => $item->active,
 
                 'departament_id'     => $item->departament_id,
                 'level'              => $level,
@@ -82,7 +83,7 @@ class ProccessController extends Controller
 
                 ->get();
             // Mapear a una nueva estructura
-        
+
             $formattedDepartments = $this->addLevel($proccess);
 
             return ApiResponse::success($formattedDepartments, 'Procesos obtenidos correctamente');
@@ -91,6 +92,7 @@ class ProccessController extends Controller
             return ApiResponse::error('Ocurrió un error', 500);
         }
     }
+
     private function getDepartmentChildrenIds($departmentId)
     {
         $ids = [$departmentId];
@@ -169,16 +171,16 @@ class ProccessController extends Controller
             return ApiResponse::error('Ocurrió un error', 500);
         }
     }
-// ```
+    // ```
 
-// El árbol quedaría así:
-// ```
-// Oficialía Mayor          (selectable: false)
-//   └─ Dirección CETIC     (selectable: false)
-//        ├─ t1             (selectable: true)
-//        └─ t2             (selectable: true)
-//   └─ Contraloría         (selectable: false)
-//        └─ t1             (selectable: true)
+    // El árbol quedaría así:
+    // ```
+    // Oficialía Mayor          (selectable: false)
+    //   └─ Dirección CETIC     (selectable: false)
+    //        ├─ t1             (selectable: true)
+    //        └─ t2             (selectable: true)
+    //   └─ Contraloría         (selectable: false)
+    //        └─ t1             (selectable: true)
     private function deactivateTree(Proccess $departament)
     {
         // Primero desactivar hijos
@@ -188,19 +190,19 @@ class ProccessController extends Controller
 
         // Luego el actual
         $departament->update([
-            'active' => false
+            'active' => !$departament->active
         ]);
     }
     public function destroy(Request $request)
     {
         try {
-
+            // return $request;
             $departament = Proccess::with('childrenRecursive')
                 ->findOrFail($request->id);
 
             $this->deactivateTree($departament);
 
-            return ApiResponse::success(null, 'Se dio de baja el tramite con sus subtramites');
+            return ApiResponse::success(null, $departament->active ? "Se dio de alta el trámite con sus subtramites" : "Se dio de baja el trámite con sus subtramites");
         } catch (\Exception $e) {
             Log::info("proccesos destroy: " . $e->getMessage());
             return ApiResponse::error('Ocurrió un error', 500);
