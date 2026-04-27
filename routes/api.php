@@ -26,9 +26,8 @@ Route::prefix('/users')->group(
 
 
 
-
 Route::middleware('auth:sanctum')->group(function () {
-    // Rutas protegidas por Sanctum
+    
     Route::prefix('/departaments')->group(function () {
         Route::get('/index', [DepartamentController::class, 'index']);
     
@@ -37,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
         
         Route::delete('/delete', [DepartamentController::class, 'destroy']);
     });
+    // Rutas protegidas por Sanctum
 
     // Usuarios
 
