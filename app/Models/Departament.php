@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class Departament extends Model
 {
-    use LogsActivity;
     protected $primaryKey = 'id';
     protected $table = 'departaments';
     protected $fillable = ['name', 'abbreviation', 'classification_code', 'departament_id', 'authorized', 'active'];
