@@ -1,0 +1,1 @@
+SELECT TABLE_NAME, DEFINER FROM information_schema.VIEWS WHERE TABLE_SCHEMA='archivo';

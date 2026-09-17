@@ -65,8 +65,15 @@ class ProcedureController extends Controller
                 // 1. Obtener firmantes requeridos desde el procedimiento almacenado
                 $requiredSigners = $this->getRequiredSigners($procedure->departament_id);
 
-                // 2. Obtener firmas ya realizadas
-                $signed = SignedByProcedure::where('procedure_id', $procedure->id)
+                // 2. Obtener firmas ya realizadas de TODOS los trámites del grupo
+                //    (signatures_procedure usa el id de cada trámite individual,
+                //     mientras que el índice del listado es el id del grupo procedures_created_at)
+                $individualIds = Procedure::where('departament_id', $procedure->departament_id)
+                    ->whereRaw('DATE(created_at) = ?', [Carbon::parse($procedure->order_date)->format('Y-m-d')])
+                    ->pluck('id');
+
+                $signed = SignaturesProcedure::whereIn('procedure_id', $individualIds)
+                    ->where('signedBy', 1)
                     ->get()
                     ->keyBy('user_id'); // índice por user_id
 
@@ -97,7 +104,8 @@ class ProcedureController extends Controller
                         'group' => $signer['group'],
                         'level' => $signer['level'],
                         'status' => $alreadySigned ? 'completado' : 'pendiente',
-                        'signed_at' => $alreadySigned ? $signed[$signer['user_id']]->created_at : null,
+                        'signedBy' => $alreadySigned,
+                        'signed_at' => $alreadySigned ? $signed[$signer['user_id']]->updated_at : null,
                         'type' => 'signature'
                     ];
                 }
@@ -113,7 +121,7 @@ class ProcedureController extends Controller
 
     /**
      * Ejecuta el procedimiento almacenado sp_authorization_chain
-     * y devuelve los firmantes requeridos (directores + usuarios con signature_position)
+     * y devuelve los firmantes requeridos (directores según jerarquía del árbol)
      */
     private function getRequiredSigners($departament_id)
     {
@@ -202,6 +210,10 @@ class ProcedureController extends Controller
                 if (isset($item['id']) && !empty($item['id'])) {
                     $procedure = Procedure::find($item['id']);
                     if ($procedure) {
+                        // Bloquear ediciones sobre trámites ya revisados (rechazados sí se pueden corregir)
+                        if ((int) $procedure->statu_id === 3) {
+                            continue;
+                        }
                         unset($data['user_id']);
                         $procedure->update($data);
                         $procedures[] = $procedure;
@@ -210,16 +222,24 @@ class ProcedureController extends Controller
                 }
 
                 // ── Consecutivo al momento de crear ──────────────────────────
+                // El consecutivo se agrupa por LOTE DIARIO (dept+año+día), no por registro individual:
+                // todos los trámites capturados el mismo día para el mismo departamento comparten
+                // el mismo número, y el número solo avanza cuando cambia el día.
                 $key = "{$departamentId}_{$year}";
 
                 if (!isset($consecutiveByYearDept[$key])) {
-                    // Total de registros YA existentes para ese dept+año
-                    $consecutiveByYearDept[$key] = Procedure::where('departament_id', $departamentId)
+                    $today = Carbon::now()->format('Y-m-d');
+
+                    // Días distintos ya registrados este año para el departamento, sin contar hoy
+                    $previousDays = (int) Procedure::where('departament_id', $departamentId)
                         ->where('year', $year)
-                        ->count();
+                        ->whereDate('created_at', '<', $today)
+                        ->selectRaw('COUNT(DISTINCT DATE(created_at)) as total')
+                        ->value('total');
+
+                    $consecutiveByYearDept[$key] = $previousDays + 1;
                 }
 
-                $consecutiveByYearDept[$key]++;
                 $consecutive = str_pad($consecutiveByYearDept[$key], 3, '0', STR_PAD_LEFT);
 
                 // Calcular y guardar directamente en el registro
@@ -413,15 +433,26 @@ class ProcedureController extends Controller
             $signatureCache = [];
 
             $toBase64Cached = function (?string $path) use (&$signatureCache): ?string {
-              
+
                     $signatureCache[$path] = $this->imageToBase64($path);
-                
+
                 return $signatureCache[$path];
             };
 
-            $allProcedures = $allProcedures->map(function ($item) use ($toBase64Cached) {
+            // ── SECCIÓN (departamento raíz, el "papá" hasta arriba del árbol) ──
+            // y SERIE (cadena completa papá,hijo,hijo... hasta el departamento del trámite)
+            $allDepartments = Departament::all()->keyBy('id');
+            [, $namePaths, $rootNames] = $this->buildPaths($allDepartments);
+
+            $seccion = $rootNames[$deptFilter] ?? '';
+            $childChain = $namePaths[$deptFilter] ?? null; // papá excluido, hijo,hijo,...
+            $serie = $childChain ? ($seccion . ',' . $childChain) : $seccion;
+
+            $allProcedures = $allProcedures->map(function ($item) use ($toBase64Cached, $seccion, $serie) {
                 $item->fileNumber  = $item->file_number;
                 $item->archiveCode = $item->archive_code;
+                $item->seccion     = $seccion;
+                $item->serie       = $serie;
 
                 // Firma: una conversión por path único
                 $item->signature_b64          = $toBase64Cached($item->signature);
@@ -438,6 +469,21 @@ class ProcedureController extends Controller
     public function changeStatus(Request $request)
     {
         try {
+            // Revisar (3) y rechazar (4) son parte del paso de revisión:
+            // solo quien tiene el permiso "revisar" (o un administrativo) puede hacerlo.
+            if (in_array((int) $request->status, [3, 4], true)) {
+                $userRole = strtolower(trim(Auth::user()->role));
+                $hasReviewPermission = DB::table('user_permissions')
+                    ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
+                    ->where('user_permissions.user_id', Auth::user()->id)
+                    ->where('permissions.name', 'revisar')
+                    ->exists();
+
+                if ($userRole !== 'administrativo' && !$hasReviewPermission) {
+                    return ApiResponse::error('No tiene permiso para revisar trámites', 403);
+                }
+            }
+
             $updateData = [
                 'statu_id' => $request->status
             ];

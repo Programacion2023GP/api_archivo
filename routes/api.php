@@ -78,7 +78,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/createorUpdate', [UserController::class, 'register']);
         Route::post('/signature', [UserController::class, 'signature']);
-        Route::post('/signature_position', [UserController::class, 'signature_position']);
         
         
         Route::get('/index', [UserController::class, 'index']);

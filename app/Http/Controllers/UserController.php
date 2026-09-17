@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ApiResponse;
+use App\Models\Departament;
 use App\Models\User;
 use App\Models\UserPermission;
 use Error;
@@ -47,28 +48,6 @@ class UserController extends Controller
             return ApiResponse::error('Ocurrio un error: ' . $e->getMessage(), 500);
         }
     }
-    public function signature_position(Request $request)
-    {
-        try {
-            $user = User::find($request->id);
-            if (!$user) {
-                return ApiResponse::error('No se encontro el usuario', 500);
-            }
-
-
-                // Guardar en el disco 'public'
-
-                // Generar URL completa
-
-                $user->signature_position = $request->signature_position;
-                $user->save();
-
-                return ApiResponse::success($user, "Se agrego la firma");
-          
-        } catch (Exception $e) {
-            return ApiResponse::error('Ocurrio un error: ' . $e->getMessage(), 500);
-        }
-    }
     public function register(Request $request)
     {
         DB::beginTransaction();
@@ -108,10 +87,28 @@ class UserController extends Controller
 
             $rawPassword = null;
 
+            // Guardar valores viejos para comparar después (solo en update)
+            $oldRole = $isUpdate ? strtolower($user->role) : null;
+            $oldDeptId = $isUpdate ? $user->departament_id : null;
+            $newRole = strtolower($request->role);
+
+            // Quien no tiene el permiso "sistemas" no puede asignar el rol Administrativo
+            // ni otorgar el permiso "sistemas" a otro usuario.
+            $authHasSistemasPermission = DB::table('user_permissions')
+                ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
+                ->where('user_permissions.user_id', Auth::user()->id)
+                ->where('permissions.name', 'sistemas')
+                ->exists();
+
+            if ($newRole === 'administrativo' && $oldRole !== 'administrativo' && !$authHasSistemasPermission) {
+                DB::rollBack();
+                return ApiResponse::error('No tiene permiso para asignar el rol Administrativo', 403);
+            }
+
             if (!$isUpdate) {
                 $rawPassword = $request->payroll;
                 $user->password = Hash::make($rawPassword);
-                if ($request->role == 'Director') {
+                if ($newRole === 'director') {
                     if (User::where('departament_id', $request->departament_id)->where('role', 'Director')->first()) {
                         return ApiResponse::error('Ya existe un director en el departamento', 404);
                     }
@@ -127,10 +124,55 @@ class UserController extends Controller
 
             $user->save();
 
+            // ── Auto-autorizar / desautorizar departamento ──
+            if ($isUpdate) {
+                // Caso 1: era director y ya no → desautorizar viejo depto
+                if ($oldRole === 'director' && $newRole !== 'director' && $oldDeptId) {
+                    Departament::where('id', $oldDeptId)->update(['authorized' => 0]);
+                }
+                // Caso 2: cambio de departamento siendo director → desautorizar viejo, autorizar nuevo
+                if ($newRole === 'director' && $oldDeptId != $request->departament_id) {
+                    if ($oldDeptId) {
+                        Departament::where('id', $oldDeptId)->update(['authorized' => 0]);
+                    }
+                    if ($request->departament_id) {
+                        Departament::where('id', $request->departament_id)->update(['authorized' => 1]);
+                    }
+                }
+                // Caso 3: sigue siendo director en el mismo depto → asegurar autorizado
+                if ($newRole === 'director' && $request->departament_id) {
+                    Departament::where('id', $request->departament_id)->update(['authorized' => 1]);
+                }
+            } else {
+                // Creación: si es director, autorizar depto
+                if ($newRole === 'director' && $request->departament_id) {
+                    Departament::where('id', $request->departament_id)->update(['authorized' => 1]);
+                }
+            }
+
             if ($request->has('permissions')) {
+                $permissionsToSave = collect($request->permissions)->map(fn($id) => (int) $id)->all();
+
+                if (!$authHasSistemasPermission) {
+                    $sistemasPermissionId = (int) DB::table('permissions')->where('name', 'sistemas')->value('id');
+
+                    // Quien no tiene "sistemas" no puede otorgarlo, pero tampoco debe quitarlo
+                    // sin querer si el usuario editado ya lo tenía (no aparece en su lista para editar).
+                    $targetAlreadyHadSistemas = $isUpdate && DB::table('user_permissions')
+                        ->where('user_id', $user->id)
+                        ->where('permission_id', $sistemasPermissionId)
+                        ->exists();
+
+                    $permissionsToSave = array_values(array_filter($permissionsToSave, fn($id) => $id !== $sistemasPermissionId));
+
+                    if ($targetAlreadyHadSistemas) {
+                        $permissionsToSave[] = $sistemasPermissionId;
+                    }
+                }
+
                 app(UserPermissionController::class)->saveUserPermissions(
                     $user->id,
-                    $request->permissions
+                    $permissionsToSave
                 );
             }
 
@@ -206,25 +248,39 @@ class UserController extends Controller
         public function index()
         {
             try {
-                $users = User::where('payroll', '!=', '000000')
-                    ->leftJoin('user_permissions', 'users.id', '=', 'user_permissions.user_id')
-                    ->leftJoin('permissions', 'user_permissions.permission_id', '=', 'permissions.id')
-                    ->leftJoin('departaments', 'departaments.id', '=', 'users.departament_id')
+                $authUserId = Auth::user()->id;
+                $hasSistemasPermission = DB::table('user_permissions')
+                    ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
+                    ->where('user_permissions.user_id', $authUserId)
+                    ->where('permissions.name', 'sistemas')
+                    ->exists();
 
+                $query = User::where('payroll', '!=', '000000')
+                    ->leftJoin('departaments', 'departaments.id', '=', 'users.departament_id')
                     ->select(
                         'users.*',
-                        'departaments.name as departament',
-                        DB::raw('GROUP_CONCAT(permissions.id) as permission_ids')
-                    )
-                    ->groupBy('users.id')
+                        'departaments.name as departament'
+                    );
+
+                // Sin el permiso "sistemas" no se ve ningún usuario con rol Administrativo,
+                // ni siquiera el propio registro.
+                if (!$hasSistemasPermission) {
+                    $query->whereRaw('LOWER(users.role) != ?', ['administrativo']);
+                }
+
+                $users = $query
                     ->orderBy('users.id','desc')
                     ->get()
                     ->map(function ($user) {
                         $userArray = $user->toArray();
-                        // Convertir los IDs de permisos de string a array de números
-                        $userArray['permissions'] = $user->permission_ids
-                            ? array_map('intval', explode(',', $user->permission_ids))
-                            : [];
+                        // Obtener permisos del usuario directamente
+                        $permissionIds = DB::table('user_permissions')
+                            ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
+                            ->where('user_permissions.user_id', $user->id)
+                            ->pluck('permissions.id')
+                            ->map(fn($id) => (int) $id)
+                            ->toArray();
+                        $userArray['permissions'] = $permissionIds;
                         return $userArray;
                     });
 
@@ -232,11 +288,14 @@ class UserController extends Controller
                     $users,
                     'Lista de usuarios'
                 );
-            } catch (\Exception $th) {
-                return ApiResponse::success(
-                    null,
-                    'No se pudo cargar los usuarios'
-                );
+        } catch (\Exception $th) {
+            \Illuminate\Support\Facades\Log::error('Error cargando usuarios: ' . $th->getMessage(), [
+                'trace' => $th->getTraceAsString()
+            ]);
+            return ApiResponse::error(
+                'No se pudo cargar los usuarios: ' . $th->getMessage(),
+                500
+            );
             }
         }
 
@@ -250,7 +309,13 @@ class UserController extends Controller
             }
 
             $technical->update(['active' => DB::raw('NOT active')]);;
-            $technical->refresh(); // 🔥 Esto es lo que falta
+            $technical->refresh();
+
+            // Auto-desautorizar departamento cuando se desactiva un director
+            if (strtolower($technical->role) === 'director' && !$technical->active && $technical->departament_id) {
+                Departament::where('id', $technical->departament_id)->update(['authorized' => 0]);
+            }
+
             return ApiResponse::success(
                 null,
                 $technical->active

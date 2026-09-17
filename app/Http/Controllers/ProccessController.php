@@ -8,6 +8,7 @@ use App\Models\Proccess;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ProccessController extends Controller
@@ -65,7 +66,7 @@ class ProccessController extends Controller
 
                 'departament_id'     => $item->departament_id,
                 'level'              => $level,
-                'selectable'         => $children->isEmpty(), // ← se calcula aquí
+                'selectable'         => true, // todos los trámites son seleccionables
                 'children_recursive' => $this->addLevel($children, $level + 1),
             ];
         })->values();
@@ -141,8 +142,21 @@ class ProccessController extends Controller
     public function processByUser()
     {
         try {
-            if (Auth::user()->role != "administrador") {
-                $departmentIds = $this->getDepartmentChildrenIds(Auth::user()->departament_id);
+            $user = Auth::user();
+            $isAdmin = strtolower($user->role) === 'administrativo';
+
+            // Si es admin O tiene permiso de revisar O no tiene departamento, ve todos
+            $hasRevisarPerm = DB::table('user_permissions')
+                ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
+                ->where('user_permissions.user_id', $user->id)
+                ->where('permissions.name', 'revisar')
+                ->exists();
+
+            if ($isAdmin || $hasRevisarPerm || !$user->departament_id) {
+                $departments = Departament::where('active', true)->get();
+                $tree = $this->buildDepartmentTree($departments, null);
+            } else {
+                $departmentIds = $this->getDepartmentChildrenIds($user->departament_id);
                 $departments = Departament::whereIn('id', $departmentIds)
                     ->where('active', true)
                     ->get();
@@ -160,9 +174,6 @@ class ProccessController extends Controller
                         null  // tratarlo como raíz
                     );
                 }
-            } else {
-                $departments = Departament::where('active', true)->get();
-                $tree = $this->buildDepartmentTree($departments, null);
             }
 
             return ApiResponse::success($tree, 'Procesos obtenidos correctamente');

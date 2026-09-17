@@ -1,0 +1,2 @@
+USE archivo;
+DESCRIBE users;

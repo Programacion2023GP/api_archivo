@@ -54,10 +54,6 @@ class Procedure extends Model
         'administrative_value' => 'boolean',
         'accounting_fiscal_value' => 'boolean',
         'legal_value' => 'boolean',
-       
-        'location_building' => 'boolean',
-        'location_position' => 'boolean',
-        'location_furniture' => 'boolean',
 
         'startDate' => 'date:Y-m-d',
         'endDate' => 'date:Y-m-d',

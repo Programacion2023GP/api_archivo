@@ -48,6 +48,7 @@ class DatabaseSeeder extends Seeder
             ['name' => 'catalogo_tramite_eliminar', 'active' => true],
             ['name' => 'usuarios_subirfirmas', 'active' => true],
             ['name' => 'revisar', 'active' => true],
+            ['name' => 'sistemas', 'active' => true],
 
 
         ];
