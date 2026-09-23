@@ -143,18 +143,23 @@ class ProccessController extends Controller
     {
         try {
             $user = Auth::user();
-            $isAdmin = strtolower($user->role) === 'administrativo';
+            $userRole = strtolower(trim($user->role));
 
-            // Si es admin O tiene permiso de revisar O no tiene departamento, ve todos
-            $hasRevisarPerm = DB::table('user_permissions')
-                ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
-                ->where('user_permissions.user_id', $user->id)
-                ->where('permissions.name', 'revisar')
-                ->exists();
-
-            if ($isAdmin || $hasRevisarPerm || !$user->departament_id) {
+            // Administrativo ve todo; Director ve su departamento y subdepartamentos;
+            // Enlace solo ve los trámites de su propio departamento.
+            if ($userRole === 'administrativo') {
                 $departments = Departament::where('active', true)->get();
                 $tree = $this->buildDepartmentTree($departments, null);
+            } else if (!$user->departament_id) {
+                $tree = collect();
+            } else if ($userRole !== 'director') {
+                $departments = Departament::where('id', $user->departament_id)
+                    ->where('active', true)
+                    ->get();
+                $tree = $this->buildDepartmentTree(
+                    $departments,
+                    $departments->first()?->departament_id
+                );
             } else {
                 $departmentIds = $this->getDepartmentChildrenIds($user->departament_id);
                 $departments = Departament::whereIn('id', $departmentIds)
