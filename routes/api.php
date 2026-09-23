@@ -38,7 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     // Rutas protegidas por Sanctum
 
-    // Usuarios
+    // Enlaces
 
 
 

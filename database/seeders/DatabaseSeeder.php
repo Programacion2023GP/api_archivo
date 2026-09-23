@@ -34,10 +34,10 @@ class DatabaseSeeder extends Seeder
            ['name' => 'tramite_actualizar', 'active' => true],
             ['name' => 'tramite_eliminar', 'active' => true],
             ['name' => 'tramite_ver', 'active' => true],
-            ['name' => 'usuarios_crear', 'active' => true],
-            ['name' => 'usuarios_actualizar', 'active' => true],
-            ['name' => 'usuarios_eliminar', 'active' => true],
-            ['name' => 'usuarios_ver', 'active' => true],
+            ['name' => 'Enlaces_crear', 'active' => true],
+            ['name' => 'Enlaces_actualizar', 'active' => true],
+            ['name' => 'Enlaces_eliminar', 'active' => true],
+            ['name' => 'Enlaces_ver', 'active' => true],
             ['name' => 'catalogo_departamentos_ver', 'active' => true],
             ['name' => 'catalogo_departamentos_crear', 'active' => true],
             ['name' => 'catalogo_departamentos_actualizar', 'active' => true],
@@ -46,7 +46,7 @@ class DatabaseSeeder extends Seeder
             ['name' => 'catalogo_tramite_crear', 'active' => true],
             ['name' => 'catalogo_tramite_actualizar', 'active' => true],
             ['name' => 'catalogo_tramite_eliminar', 'active' => true],
-            ['name' => 'usuarios_subirfirmas', 'active' => true],
+            ['name' => 'Enlaces_subirfirmas', 'active' => true],
             ['name' => 'revisar', 'active' => true],
             ['name' => 'sistemas', 'active' => true],
 
@@ -79,7 +79,7 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
-        // Verificar si el usuario ya existe
+        // Verificar si el Enlace ya existe
         DB::table('users')->insert([
             [
                 'id' => 1,
@@ -141,7 +141,7 @@ class DatabaseSeeder extends Seeder
                 'paternalSurname' => 'ESTRADA',
                 'maternalSurname' => 'RIVERA',
                 'payroll' => '612022',
-                'role' => 'Usuario',
+                'role' => 'Enlace',
                 'departament_id' => 2,
                 'password' => Hash::make('612022'),
                 'active' => 1,
@@ -232,7 +232,7 @@ class DatabaseSeeder extends Seeder
 
 // -- Primero, declara las variables
 // SET @prefijo = 'catalogo_tramite';
-// SET @usuario_id = 1;
+// SET @Enlace_id = 1;
 
 // -- Crear los nombres de permisos con collation explícita
 // SET @crear = CONCAT(@prefijo, '_crear') COLLATE utf8mb4_unicode_ci;
@@ -247,9 +247,9 @@ class DatabaseSeeder extends Seeder
 // (@exportar, NOW(), NOW()),
 // (@eliminar, NOW(), NOW());
 
-// -- Asignar permisos al usuario usando OR con collation explícita
+// -- Asignar permisos al Enlace usando OR con collation explícita
 // INSERT IGNORE INTO user_permissions (user_id, permission_id, created_at, updated_at)
-// SELECT @usuario_id, id, NOW(), NOW()
+// SELECT @Enlace_id, id, NOW(), NOW()
 // FROM permissions 
 // WHERE name = @crear 
 //    OR name = @ver 

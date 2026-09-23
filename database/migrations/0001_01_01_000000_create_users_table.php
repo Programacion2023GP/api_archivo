@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('maternalSurname')->nullable();
             $table->string('fullName')->storedAs('CONCAT(firstName, " ",paternalSurname, " ", maternalSurname)');
             $table->string('payroll')->unique();
-            $table->string('role')->default('usuario');
+            $table->string('role')->default('Enlace');
             $table->foreignId('departament_id')->nullable()->index();
 
             

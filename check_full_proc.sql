@@ -1,5 +1,5 @@
 USE archivo;
--- Ver todos los procedures y sus usuarios/departamentos
+-- Ver todos los procedures y sus Enlaces/departamentos
 SELECT p.id, p.user_id, p.departament_id, p.statu_id, p.error, p.created_at,
        u.firstName, u.paternalSurname, u.role AS user_role, u.departament_id AS user_dept,
        d.name AS dept_name,

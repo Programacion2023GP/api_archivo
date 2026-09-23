@@ -99,7 +99,7 @@ class LogController extends Controller
 
                 return [
                     'id' => $log->id,
-                    'usuario' => $log->user?->fullName ?? 'Sistema',
+                    'Enlace' => $log->user?->fullName ?? 'Sistema',
                     'modelo' => class_basename($log->loggable_type),
                     'accion' => $accion,
                     'valores_anteriores' => $old,

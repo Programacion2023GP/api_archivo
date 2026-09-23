@@ -145,7 +145,7 @@ class DepartamentController extends Controller
             $departament = Departament::find($request->id);
 
             if (!$departament) {
-                return ApiResponse::error('Usuario no encontrado', 404);
+                return ApiResponse::error('Enlace no encontrado', 404);
             }
 
             $departament->update(['authorized' => DB::raw('NOT authorized')]);;

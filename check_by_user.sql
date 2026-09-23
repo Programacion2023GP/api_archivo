@@ -1,5 +1,5 @@
 USE archivo;
--- Ver procedures del usuario JOVANNY (id=5, dept=196)
+-- Ver procedures del Enlace JOVANNY (id=5, dept=196)
 SELECT p.id, p.user_id, p.departament_id, p.statu_id, p.error, 
        COALESCE(sbp.name, st.name) AS display_status
 FROM procedures p

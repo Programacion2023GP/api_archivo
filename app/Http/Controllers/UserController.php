@@ -25,7 +25,7 @@ class UserController extends Controller
         try {
             $user = User::find($request->id);
             if (!$user) {
-                return ApiResponse::error('No se encontro el usuario', 500);
+                return ApiResponse::error('No se encontro el Enlace', 500);
             }
 
             if ($request->hasFile('signature')) {
@@ -82,7 +82,7 @@ class UserController extends Controller
 
             if ($isUpdate && !$user) {
                 DB::rollBack();
-                return ApiResponse::error('Usuario no encontrado', 404);
+                return ApiResponse::error('Enlace no encontrado', 404);
             }
 
             $rawPassword = null;
@@ -93,7 +93,7 @@ class UserController extends Controller
             $newRole = strtolower($request->role);
 
             // Quien no tiene el permiso "sistemas" no puede asignar el rol Administrativo
-            // ni otorgar el permiso "sistemas" a otro usuario.
+            // ni otorgar el permiso "sistemas" a otro Enlace.
             $authHasSistemasPermission = DB::table('user_permissions')
                 ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
                 ->where('user_permissions.user_id', Auth::user()->id)
@@ -157,7 +157,7 @@ class UserController extends Controller
                     $sistemasPermissionId = (int) DB::table('permissions')->where('name', 'sistemas')->value('id');
 
                     // Quien no tiene "sistemas" no puede otorgarlo, pero tampoco debe quitarlo
-                    // sin querer si el usuario editado ya lo tenía (no aparece en su lista para editar).
+                    // sin querer si el Enlace editado ya lo tenía (no aparece en su lista para editar).
                     $targetAlreadyHadSistemas = $isUpdate && DB::table('user_permissions')
                         ->where('user_id', $user->id)
                         ->where('permission_id', $sistemasPermissionId)
@@ -187,7 +187,7 @@ class UserController extends Controller
                 'token' => $token,
                 'token_type' => 'Bearer',
                 'password' => $rawPassword,
-            ], $isUpdate ? 'Usuario actualizado con éxito' : 'Usuario registrado con éxito');
+            ], $isUpdate ? 'Enlace actualizado con éxito' : 'Enlace registrado con éxito');
         } catch (ValidationException $e) {
 
             DB::rollBack();
@@ -208,7 +208,7 @@ class UserController extends Controller
         }
     }
     /**
-     * Login de usuario
+     * Login de Enlace
      */
     public function login(Request $request)
     {
@@ -262,7 +262,7 @@ class UserController extends Controller
                         'departaments.name as departament'
                     );
 
-                // Sin el permiso "sistemas" no se ve ningún usuario con rol Administrativo,
+                // Sin el permiso "sistemas" no se ve ningún Enlace con rol Administrativo,
                 // ni siquiera el propio registro.
                 if (!$hasSistemasPermission) {
                     $query->whereRaw('LOWER(users.role) != ?', ['administrativo']);
@@ -273,7 +273,7 @@ class UserController extends Controller
                     ->get()
                     ->map(function ($user) {
                         $userArray = $user->toArray();
-                        // Obtener permisos del usuario directamente
+                        // Obtener permisos del Enlace directamente
                         $permissionIds = DB::table('user_permissions')
                             ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
                             ->where('user_permissions.user_id', $user->id)
@@ -286,14 +286,14 @@ class UserController extends Controller
 
                 return ApiResponse::success(
                     $users,
-                    'Lista de usuarios'
+                    'Lista de Enlaces'
                 );
         } catch (\Exception $th) {
-            \Illuminate\Support\Facades\Log::error('Error cargando usuarios: ' . $th->getMessage(), [
+            \Illuminate\Support\Facades\Log::error('Error cargando Enlaces: ' . $th->getMessage(), [
                 'trace' => $th->getTraceAsString()
             ]);
             return ApiResponse::error(
-                'No se pudo cargar los usuarios: ' . $th->getMessage(),
+                'No se pudo cargar los Enlaces: ' . $th->getMessage(),
                 500
             );
             }
@@ -305,7 +305,7 @@ class UserController extends Controller
             $technical = User::find($request->id);
 
             if (!$technical) {
-                return ApiResponse::error('Usuario no encontrado', 404);
+                return ApiResponse::error('Enlace no encontrado', 404);
             }
 
             $technical->update(['active' => DB::raw('NOT active')]);;
@@ -319,11 +319,11 @@ class UserController extends Controller
             return ApiResponse::success(
                 null,
                 $technical->active
-                    ? 'Usuario activado correctamente'
-                    : 'Usuario desactivado correctamente'
+                    ? 'Enlace activado correctamente'
+                    : 'Enlace desactivado correctamente'
             );
         } catch (Exception $e) {
-            return ApiResponse::error('Error al eliminar el usuario', 500);
+            return ApiResponse::error('Error al eliminar el Enlace', 500);
         }
     }
 }

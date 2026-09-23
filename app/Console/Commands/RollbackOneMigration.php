@@ -49,7 +49,7 @@ class RollbackOneMigration extends Command
         // Mostrar resumen de migraciones
         $this->showMigrationsSummary($migrations);
 
-        // Confirmar con el usuario
+        // Confirmar con el Enlace
         if (!$force && !$this->confirm("¿Estás seguro de que quieres refrescar la tabla '$table'?", true)) {
             $this->info('🛑 Operación cancelada.');
             return 0;

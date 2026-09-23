@@ -161,13 +161,13 @@ class ProccessController extends Controller
                     ->where('active', true)
                     ->get();
 
-                // Usar directamente el departamento del usuario como raíz
+                // Usar directamente el departamento del Enlace como raíz
                 $tree = $this->buildDepartmentTree(
                     $departments,
                     $departments->first()?->departament_id  // padre real
                 );
 
-                // Si sigue vacío, el usuario ES el nodo raíz — construir desde su propio depto
+                // Si sigue vacío, el Enlace ES el nodo raíz — construir desde su propio depto
                 if ($tree->isEmpty()) {
                     $tree = $this->buildDepartmentTree(
                         $departments,

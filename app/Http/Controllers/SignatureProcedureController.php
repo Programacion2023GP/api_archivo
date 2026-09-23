@@ -22,7 +22,7 @@ class SignatureProcedureController extends Controller
     public function signatureByUser(Request $request)
     {
         try {
-            // Siempre firma el usuario autenticado (nunca el user_id que mande el cliente)
+            // Siempre firma el Enlace autenticado (nunca el user_id que mande el cliente)
             $userId = Auth::user()->id;
 
             if (!$request->filled('startDate') || !$request->filled('departament_id')) {
